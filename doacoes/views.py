@@ -271,3 +271,4 @@ class MensagemViewSet(viewsets.ModelViewSet):
 class DoacaoViewSet(viewsets.ModelViewSet):
     queryset = Doacao.objects.all()
     serializer_class = DoacaoSerializer
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
