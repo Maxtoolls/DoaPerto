@@ -1,0 +1,52 @@
+Observações: Ir direto para o intem 7.
+
+
+1)django-admin startproject doaperto .
+cria algo como: 
+DoaPerto/
+│
+├── manage.py
+├── doaperto/
+│   ├── __init__.py
+│   ├── settings.py
+│   ├── urls.py
+│   ├── asgi.py
+│   └── wsgi.py
+
+2)python manage.py startapp doacoes
+cria: 
+doacoes/
+		models.py
+		views.py
+		admin.py
+		
+3) colocar models_doacao.py, dentro de doacoes/models.py
+
+4)Configurao o settings(registar o app)
+INSTALLED_APPS = [
+    'django.contrib.admin',
+    'django.contrib.auth',
+    'django.contrib.contenttypes',
+    'django.contrib.sessions',
+    'django.contrib.messages',
+    'django.contrib.staticfiles',
+    'doacoes',
+]
+
+5)criar o banco
+python manage.py makemigrations
+python manage.py migrate
+
+
+6)
+python manage.py runserver se aparecer: http://127.0.0.1:8000/ está ok		
+
+tudo ok: jogar no navegador: http://127.0.0.1:8000/
+
+7)Teste
+cmd na pasta do projeto(Doaperto)
+
+-> Roda o servidor com: python manage.py runserver(CTRL+C, reinicia o servidor)
+-> Na url da pagina de internet digitar: http://127.0.0.1:8000/api/doacoes/
+
+		
