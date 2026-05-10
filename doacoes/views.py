@@ -7,13 +7,13 @@ from django.db.models import Q
 from math import radians, sin, cos, sqrt, atan2
 
 from .models import (
-    CategoriaItem, Usuario, Doador, Receptor, PontoColeta,
+    Doacao, CategoriaItem, Usuario, Doador, Receptor, PontoColeta,
     ItemDoacao, Interesse, Mensagem
 )
 from .serializers import (
-    CategoriaItemSerializer, UsuarioSerializer, DoadorSerializer,
+    DoacaoSerializer, CategoriaItemSerializer, UsuarioSerializer, DoadorSerializer,
     ReceptorSerializer, PontoColetaSerializer, ItemDoacaoSerializer,
-    InteresseSerializer, MensagemSerializer, DoacaoSerializer
+    InteresseSerializer, MensagemSerializer
 )
 
 
@@ -266,3 +266,8 @@ class MensagemViewSet(viewsets.ModelViewSet):
         mensagens = Mensagem.objects.filter(destinatario=usuario, lida=False)
         serializer = self.get_serializer(mensagens, many=True)
         return Response(serializer.data)
+
+
+class DoacaoViewSet(viewsets.ModelViewSet):
+    queryset = Doacao.objects.all()
+    serializer_class = DoacaoSerializer

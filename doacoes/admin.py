@@ -1,8 +1,15 @@
 from django.contrib import admin
 from .models import (
-    CategoriaItem, Usuario, Doador, Receptor, PontoColeta,
+    Doacao, CategoriaItem, Usuario, Doador, Receptor, PontoColeta,
     ItemDoacao, Interesse, Mensagem
 )
+
+
+@admin.register(Doacao)
+class DoacaoAdmin(admin.ModelAdmin):
+    list_display = ['item', 'categoria', 'quantidade', 'data_criacao']
+    list_filter = ['categoria', 'data_criacao']
+    search_fields = ['item', 'descricao']
 
 
 @admin.register(CategoriaItem)

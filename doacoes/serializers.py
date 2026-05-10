@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from django.contrib.auth.models import User
 from .models import (
-    CategoriaItem, Usuario, Doador, Receptor, PontoColeta,
+    Doacao, CategoriaItem, Usuario, Doador, Receptor, PontoColeta,
     ItemDoacao, Interesse, Mensagem
 )
 
@@ -163,5 +163,5 @@ class MensagemSerializer(serializers.ModelSerializer):
 
 class DoacaoSerializer(serializers.ModelSerializer):
     class Meta:
-        model = ItemDoacao
+        model = Doacao
         fields = '__all__'
