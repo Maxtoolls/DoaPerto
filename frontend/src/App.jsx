@@ -280,59 +280,103 @@ function Home({ setCurrentPage }) {
 }
 
 function Explorar() {
-  const [doacoes] = useState([
-    { id: 1, item: 'Cesta Básica', categoria: 'Alimento', quantidade: 2, data: '2026-05-10' },
-    { id: 2, item: 'Livros', categoria: 'Educação', quantidade: 5, data: '2026-05-10' },
-    { id: 3, item: 'Roupas', categoria: 'Vestuário', quantidade: 10, data: '2026-05-09' },
+  const [doacoes, setDoacoes] = useState([
+    { id: 1, item: 'Cesta Básica', categoria: 'Alimento', quantidade: 2, data_criacao: '2026-05-10' },
+    { id: 2, item: 'Livros', categoria: 'Educação', quantidade: 5, data_criacao: '2026-05-10' },
+    { id: 3, item: 'Roupas', categoria: 'Vestuário', quantidade: 10, data_criacao: '2026-05-09' },
   ]);
+  const [loading, setLoading] = useState(false);
+
+  // Carregar doações da API
+  const carregarDoacoes = () => {
+    setLoading(true);
+    fetch('http://localhost:8000/api/doacoes/')
+      .then(res => res.json())
+      .then(data => {
+        console.log('Doações carregadas:', data);
+        if (data.results) {
+          setDoacoes(data.results);
+        } else if (Array.isArray(data)) {
+          setDoacoes(data);
+        }
+        setLoading(false);
+      })
+      .catch(err => {
+        console.error('Erro ao carregar doações:', err);
+        setLoading(false);
+      });
+  };
 
   return (
     <div style={{ padding: '2rem', maxWidth: '1200px', margin: '0 auto' }}>
-      <h1 style={{ color: '#FF9500', marginBottom: '1rem' }}>Explorar Doações</h1>
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
-        gap: '1.5rem'
-      }}>
-        {doacoes.map(doacao => (
-          <div
-            key={doacao.id}
-            style={{
-              background: 'white',
-              borderRadius: '12px',
-              overflow: 'hidden',
-              boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
-            }}
-          >
-            <div style={{ background: '#FFF3E0', padding: '1rem', display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ background: '#FF9500', color: 'white', padding: '0.3rem 0.8rem', borderRadius: '20px', fontSize: '0.8rem', fontWeight: 'bold' }}>
-                {doacao.categoria}
-              </span>
-              <span style={{ background: '#FFB84D', color: 'white', padding: '0.3rem 0.8rem', borderRadius: '20px', fontSize: '0.8rem', fontWeight: 'bold' }}>
-                {doacao.quantidade}x
-              </span>
-            </div>
-            <div style={{ padding: '1.5rem' }}>
-              <h3 style={{ color: '#333', marginBottom: '0.5rem' }}>{doacao.item}</h3>
-              <p style={{ color: '#666', fontSize: '0.9rem', marginBottom: '1rem' }}>
-                Disponível desde {doacao.data}
-              </p>
-              <button style={{
-                width: '100%',
-                padding: '0.75rem',
-                background: '#FF9500',
-                color: 'white',
-                border: 'none',
-                borderRadius: '6px',
-                fontWeight: 'bold',
-                cursor: 'pointer'
-              }}>
-                Expressar Interesse
-              </button>
-            </div>
-          </div>
-        ))}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
+        <h1 style={{ color: '#FF9500', margin: 0 }}>Explorar Doações</h1>
+        <button
+          onClick={carregarDoacoes}
+          style={{
+            padding: '0.6rem 1.2rem',
+            background: '#FF9500',
+            color: 'white',
+            border: 'none',
+            borderRadius: '6px',
+            fontWeight: 'bold',
+            cursor: 'pointer'
+          }}
+        >
+          {loading ? 'Carregando...' : 'Carregar da API'}
+        </button>
       </div>
+
+      {doacoes.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: '2rem', color: '#666' }}>
+          <p>Nenhuma doação encontrada</p>
+        </div>
+      ) : (
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+          gap: '1.5rem'
+        }}>
+          {doacoes.map(doacao => (
+            <div
+              key={doacao.id}
+              style={{
+                background: 'white',
+                borderRadius: '12px',
+                overflow: 'hidden',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
+              }}
+            >
+              <div style={{ background: '#FFF3E0', padding: '1rem', display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ background: '#FF9500', color: 'white', padding: '0.3rem 0.8rem', borderRadius: '20px', fontSize: '0.8rem', fontWeight: 'bold' }}>
+                  {doacao.categoria}
+                </span>
+                <span style={{ background: '#FFB84D', color: 'white', padding: '0.3rem 0.8rem', borderRadius: '20px', fontSize: '0.8rem', fontWeight: 'bold' }}>
+                  {doacao.quantidade}x
+                </span>
+              </div>
+              <div style={{ padding: '1.5rem' }}>
+                <h3 style={{ color: '#333', marginBottom: '0.5rem' }}>{doacao.item}</h3>
+                <p style={{ color: '#666', fontSize: '0.9rem', marginBottom: '1rem' }}>
+                  Disponível desde {new Date(doacao.data_criacao).toLocaleDateString('pt-BR')}
+                </p>
+                <button style={{
+                  width: '100%',
+                  padding: '0.75rem',
+                  background: '#FF9500',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '6px',
+                  fontWeight: 'bold',
+                  cursor: 'pointer'
+                }}>
+                  Expressar Interesse
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
