@@ -1,6 +1,7 @@
-from rest_framework import viewsets, permissions, status, filters
-from rest_framework.decorators import action
+from rest_framework import viewsets, permissions, status, filters, generics
+from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
+from rest_framework_simplejwt.tokens import RefreshToken
 from django_filters.rest_framework import DjangoFilterBackend
 from django.contrib.auth.models import User
 from django.db.models import Q
@@ -266,6 +267,47 @@ class MensagemViewSet(viewsets.ModelViewSet):
         mensagens = Mensagem.objects.filter(destinatario=usuario, lida=False)
         serializer = self.get_serializer(mensagens, many=True)
         return Response(serializer.data)
+
+
+@api_view(['POST'])
+@permission_classes([permissions.AllowAny])
+def registro(request):
+    username = request.data.get('username')
+    email = request.data.get('email')
+    password = request.data.get('password')
+    first_name = request.data.get('first_name', '')
+
+    if not username or not email or not password:
+        return Response({'detail': 'username, email e password são obrigatórios'}, status=status.HTTP_400_BAD_REQUEST)
+
+    if User.objects.filter(username=username).exists():
+        return Response({'detail': 'Usuário já existe'}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        user = User.objects.create_user(
+            username=username,
+            email=email,
+            password=password,
+            first_name=first_name
+        )
+
+        usuario = Usuario.objects.create(
+            user=user,
+            tipo='doador',
+            aceite_termos=True
+        )
+
+        refresh = RefreshToken.for_user(user)
+        return Response({
+            'access': str(refresh.access_token),
+            'refresh': str(refresh),
+            'user': {
+                'username': user.username,
+                'email': user.email
+            }
+        }, status=status.HTTP_201_CREATED)
+    except Exception as e:
+        return Response({'detail': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 
 class DoacaoViewSet(viewsets.ModelViewSet):
