@@ -37,6 +37,60 @@ Observações:
 - O `VITE_API_URL` do `frontend` em compose aponta para `http://web:8000/api` (host do serviço `web`).
 - Usamos SQLite atualmente; para produção, substitua por Postgres e ajuste `docker-compose.yml`.
 
+## Infraestrutura - Guia Rápido
+Pré-requisitos: `docker`, `docker-compose` (ou `docker compose`), `git`.
+
+1) Copie variáveis de ambiente de exemplo:
+
+```bash
+cp .env.example .env
+```
+
+2) Levantar ambiente de desenvolvimento (backend + frontend):
+
+```bash
+docker-compose up --build
+# Backend: http://localhost:8000
+# Frontend: http://localhost:5173
+```
+
+3) Executar migrações e criar superuser dentro do container (após `up`):
+
+```bash
+docker-compose exec web python manage.py migrate
+docker-compose exec web python manage.py createsuperuser
+```
+
+4) Logs e debugging:
+
+```bash
+docker-compose logs -f web
+docker-compose logs -f frontend
+```
+
+5) Rodar apenas backend em container (útil para CI/local):
+
+```bash
+docker build -t doaperto-backend .
+docker run -p 8000:8000 --env-file .env doaperto-backend
+```
+
+6) Produção - sugestões rápidas:
+- Substitua SQLite por Postgres; adicione serviço `db` no `docker-compose.yml` e ajuste `DATABASES` em `settings.py`.
+- Sirva o backend com `gunicorn` e coloque `nginx` na frente para servir `static` e terminar TLS.
+- Não use `DEBUG=True` em produção; carregue segredos via gerenciador de segredos.
+
+7) CI (GitHub Actions):
+- O workflow `.github/workflows/ci.yml` já faz `pip install .`, `migrate` e build do frontend.
+- Ajuste steps para executar sua suíte de testes e linters (e.g. `pytest`, `eslint`).
+
+Checklist de Infra/DevOps (opcional):
+- [ ] Substituir SQLite por Postgres no compose
+- [ ] Adicionar job de testes automatizados no CI
+- [ ] Adicionar build e push de imagens para registry (Docker Hub / GitHub Packages)
+- [ ] Adicionar healthchecks e restart policies nos serviços docker
+
+
 
 ## Instalação
 
