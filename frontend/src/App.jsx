@@ -42,7 +42,12 @@ function Navbar({ currentPage, setCurrentPage, user, setUser, setToken }) {
         </button>
         {user ? (
           <>
-            <span style={{ fontSize: '0.9rem' }}>👤 {user.username}</span>
+            <button
+              onClick={() => setCurrentPage('perfil')}
+              style={{ color: 'white', background: 'none', border: 'none', fontWeight: '700', cursor: 'pointer', fontSize: '0.95rem' }}
+            >
+              👤 {user.username}
+            </button>
             <button
               onClick={handleLogout}
               style={{ color: 'white', background: 'none', border: 'none', fontWeight: '500', cursor: 'pointer', fontSize: '1rem' }}
@@ -1884,13 +1889,151 @@ function Registro({ setCurrentPage, setUser, setToken }) {
   );
 }
 
+function Profile({ setCurrentPage, setUser, setToken, token }) {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [feedback, setFeedback] = useState('');
+
+  useEffect(() => {
+    const fetchProfile = async () => {
+      setLoading(true);
+      try {
+        const resp = await apiClient.get('/usuarios/me/');
+        setData(resp.data);
+      } catch (err) {
+        console.error('Erro ao carregar perfil:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchProfile();
+  }, []);
+
+  const handleChange = (e) => {
+    setData({ ...data, [e.target.name]: e.target.value });
+  };
+
+  const handleSave = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    setFeedback('');
+    try {
+      const payload = {
+        first_name: data.user?.first_name || data.user?.username || '',
+        email: data.user?.email || '',
+        telefone: data.telefone || '',
+        endereco: data.endereco || '',
+        latitude: data.latitude || null,
+        longitude: data.longitude || null
+      };
+      const resp = await apiClient.patch('/usuarios/me/', payload);
+      setData(resp.data);
+      setUser((u) => ({ ...u, username: resp.data.user?.username || u?.username }));
+      setFeedback('Perfil atualizado com sucesso.');
+    } catch (err) {
+      console.error('Erro ao salvar perfil:', err);
+      setFeedback('Erro ao atualizar perfil.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!window.confirm('Tem certeza que deseja excluir sua conta? Esta ação é irreversível.')) return;
+    try {
+      await apiClient.delete('/usuarios/me/');
+      localStorage.removeItem('token');
+      localStorage.removeItem('access_token');
+      setToken(null);
+      setUser(null);
+      setCurrentPage('home');
+    } catch (err) {
+      console.error('Erro ao deletar conta:', err);
+      setFeedback('Erro ao deletar conta.');
+    }
+  };
+
+  if (loading) return (
+    <div style={{ padding: '2rem', textAlign: 'center' }}>Carregando perfil...</div>
+  );
+
+  if (!data) return (
+    <div style={{ padding: '2rem', textAlign: 'center' }}>Perfil não encontrado.</div>
+  );
+
+  return (
+    <div style={{ maxWidth: '900px', margin: '2rem auto', padding: '1rem' }}>
+      <div style={{ background: 'white', padding: '1.5rem', borderRadius: '12px', boxShadow: '0 4px 12px rgba(0,0,0,0.06)' }}>
+        <h2 style={{ marginTop: 0 }}>Meu Perfil</h2>
+        {feedback && <div style={{ marginBottom: '1rem', color: '#2E7D32' }}>{feedback}</div>}
+        <form onSubmit={handleSave} style={{ display: 'grid', gap: '1rem' }}>
+          <div>
+            <label style={{ display: 'block', marginBottom: '0.5rem' }}>Nome</label>
+            <input name="first_name" value={data.user?.first_name || ''} onChange={(e) => setData({ ...data, user: { ...data.user, first_name: e.target.value } })} style={{ width: '100%', padding: '0.5rem' }} />
+          </div>
+          <div>
+            <label style={{ display: 'block', marginBottom: '0.5rem' }}>Email</label>
+            <input name="email" value={data.user?.email || ''} onChange={(e) => setData({ ...data, user: { ...data.user, email: e.target.value } })} style={{ width: '100%', padding: '0.5rem' }} />
+          </div>
+          <div>
+            <label style={{ display: 'block', marginBottom: '0.5rem' }}>Telefone</label>
+            <input name="telefone" value={data.telefone || ''} onChange={handleChange} style={{ width: '100%', padding: '0.5rem' }} />
+          </div>
+          <div>
+            <label style={{ display: 'block', marginBottom: '0.5rem' }}>Endereço</label>
+            <input name="endereco" value={data.endereco || ''} onChange={handleChange} style={{ width: '100%', padding: '0.5rem' }} />
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
+            <div>
+              <label style={{ display: 'block', marginBottom: '0.5rem' }}>Latitude</label>
+              <input name="latitude" value={data.latitude || ''} onChange={handleChange} style={{ width: '100%', padding: '0.5rem' }} />
+            </div>
+            <div>
+              <label style={{ display: 'block', marginBottom: '0.5rem' }}>Longitude</label>
+              <input name="longitude" value={data.longitude || ''} onChange={handleChange} style={{ width: '100%', padding: '0.5rem' }} />
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', gap: '0.5rem' }}>
+            <button type="submit" disabled={saving} style={{ background: '#FF9500', color: 'white', border: 'none', padding: '0.75rem 1rem', borderRadius: '6px' }}>{saving ? 'Salvando...' : 'Salvar'}</button>
+            <button type="button" onClick={handleDelete} style={{ background: '#f44336', color: 'white', border: 'none', padding: '0.75rem 1rem', borderRadius: '6px' }}>Excluir Conta</button>
+            <button type="button" onClick={() => setCurrentPage('dashboard')} style={{ background: 'transparent', border: '1px solid #ddd', padding: '0.75rem 1rem', borderRadius: '6px' }}>Voltar</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const [currentPage, setCurrentPage] = useState('home');
   const [user, setUser] = useState(null);
   const [token, setToken] = useState(() => localStorage.getItem('token') || localStorage.getItem('access_token'));
+  // load user profile when token exists but user state is empty
+  useEffect(() => {
+    const fetchMe = async () => {
+      if (!token || user) return;
+      try {
+        const resp = await apiClient.get('/usuarios/me/');
+        const me = resp.data;
+        setUser({ username: me.user?.username || me.user?.email, email: me.user?.email, first_name: me.user?.first_name });
+      } catch (err) {
+        console.error('Erro ao buscar perfil atual:', err);
+        // se token inválido, limpar
+        if (err.response && err.response.status === 401) {
+          localStorage.removeItem('token');
+          localStorage.removeItem('access_token');
+          setToken(null);
+        }
+      }
+    };
+
+    fetchMe();
+  }, [token, user]);
   const isItemPage = currentPage.startsWith('item-');
-  const isKnownPage = ['home', 'explorar', 'login', 'registro', 'dashboard', 'meus-itens', 'meus-interesses', 'expressar-interesse'].includes(currentPage) || isItemPage;
-  const requiresToken = currentPage === 'dashboard' || currentPage === 'meus-itens' || isItemPage;
+  const isKnownPage = ['home', 'explorar', 'login', 'registro', 'dashboard', 'meus-itens', 'meus-interesses', 'expressar-interesse', 'perfil'].includes(currentPage) || isItemPage;
+  const requiresToken = currentPage === 'dashboard' || currentPage === 'meus-itens' || currentPage === 'perfil' || isItemPage;
   const showHome = !isKnownPage || currentPage === 'home' || (requiresToken && !token);
 
   useEffect(() => {
@@ -1908,6 +2051,7 @@ export default function App() {
           {currentPage === 'explorar' && <Explorar setCurrentPage={setCurrentPage} token={token} />}
           {currentPage === 'login' && <Login setCurrentPage={setCurrentPage} setUser={setUser} setToken={setToken} />}
           {currentPage === 'registro' && <Registro setCurrentPage={setCurrentPage} setUser={setUser} setToken={setToken} />}
+          {currentPage === 'perfil' && token && <Profile setCurrentPage={setCurrentPage} setUser={setUser} setToken={setToken} token={token} />}
           {currentPage === 'dashboard' && token && <Dashboard user={user} setCurrentPage={setCurrentPage} token={token} />}
           {currentPage === 'meus-itens' && token && <MeusItens token={token} setCurrentPage={setCurrentPage} />}
           {currentPage === 'meus-interesses' && token && <MeusInteresses setCurrentPage={setCurrentPage} />}

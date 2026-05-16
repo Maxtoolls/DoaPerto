@@ -45,14 +45,50 @@ class UsuarioViewSet(viewsets.ModelViewSet):
     filterset_fields = ['tipo', 'aceite_termos']
     search_fields = ['user__username', 'user__email']
 
-    @action(detail=False, methods=['get'])
+    @action(detail=False, methods=['get', 'put', 'patch', 'delete'])
     def me(self, request):
+        # Support GET, PUT/PATCH and DELETE on /usuarios/me/
         try:
             usuario = Usuario.objects.get(user=request.user)
-            serializer = self.get_serializer(usuario)
-            return Response(serializer.data)
         except Usuario.DoesNotExist:
             return Response({'detail': 'Usuário não encontrado'}, status=status.HTTP_404_NOT_FOUND)
+
+        if request.method == 'GET':
+            serializer = self.get_serializer(usuario)
+            return Response(serializer.data)
+
+        if request.method in ['PUT', 'PATCH']:
+            data = request.data
+            # update related Django User fields if provided
+            user = request.user
+            user_changed = False
+            if 'first_name' in data:
+                user.first_name = data.get('first_name') or ''
+                user_changed = True
+            if 'last_name' in data:
+                user.last_name = data.get('last_name') or ''
+                user_changed = True
+            if 'email' in data:
+                user.email = data.get('email') or ''
+                user_changed = True
+            if user_changed:
+                user.save()
+
+            # update Usuario model fields
+            serializer = self.get_serializer(usuario, data=data, partial=(request.method == 'PATCH'))
+            serializer.is_valid(raise_exception=True)
+            serializer.save()
+            return Response(serializer.data)
+
+        if request.method == 'DELETE':
+            # delete both perfil and Django user to fully remove account
+            user = request.user
+            try:
+                usuario.delete()
+            except Exception:
+                pass
+            user.delete()
+            return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class DoadorViewSet(viewsets.ModelViewSet):
