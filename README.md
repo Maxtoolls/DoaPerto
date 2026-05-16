@@ -8,6 +8,36 @@ Sistema de doações com geolocalização conectando doadores com receptores.
 - **Database:** SQLite
 - **Package Manager:** uv (Python), npm (Node.js)
 
+## Principais alterações recentes
+- `make_receptor` management command (cria/garante `Receptor` para um `Usuario`).
+- `registro` API agora aceita `tipo` ("doador" ou "receptor") e cria o perfil correspondente.
+- `ItemDoacaoSerializer` expõe `interesses` para que o doador veja quem manifestou interesse.
+- Frontend: telas de `Registro` com botões "Sou doador" / "Sou receptor"; `Meus Itens` mostra interessados inline; `Expressar Interesse` página/ação.
+
+## Infraestrutura (Docker + CI)
+Adicionei uma infraestrutura mínima para desenvolvimento e integração contínua:
+
+- `Dockerfile` (raiz) — container de desenvolvimento para o backend (executa `manage.py runserver`).
+- `frontend/Dockerfile` — container para o frontend usando Vite.
+- `docker-compose.yml` — orquestra `web` (Django) e `frontend` (Vite) para desenvolvimento;
+- `.env.example` — variáveis de ambiente de exemplo.
+- `.github/workflows/ci.yml` — workflow CI básico que instala dependências, executa `manage.py check/migrate` e build do frontend.
+
+Rodando com Docker Compose (desenvolvimento):
+
+```bash
+# constrói containers e inicia backend (8000) e frontend (5173)
+docker-compose up --build
+
+# acessar frontend: http://localhost:5173
+# acessar API: http://localhost:8000/api/
+```
+
+Observações:
+- O `VITE_API_URL` do `frontend` em compose aponta para `http://web:8000/api` (host do serviço `web`).
+- Usamos SQLite atualmente; para produção, substitua por Postgres e ajuste `docker-compose.yml`.
+
+
 ## Instalação
 
 ### Backend
@@ -118,6 +148,7 @@ npm run dev
 2. **Cadastre como Doador/Receptor:**
    - Após login, clique em "Ser Doador" ou "Ser Receptor"
    - Complete o formulário
+   - Também é possível indicar o tipo no registro: a tela de registro agora tem botões "Sou doador" / "Sou receptor" e o backend criará automaticamente o perfil correspondente.
 
 3. **Veja o mapa:**
    - Acesse a página de Mapa
@@ -135,6 +166,12 @@ Criar arquivo `.env` na raiz do projeto (opcional):
 ```env
 DEBUG=True
 ALLOWED_HOSTS=localhost,127.0.0.1
+```
+
+Para uso com `docker-compose` copie `.env.example`:
+
+```bash
+cp .env.example .env
 ```
 
 ## Deploy
