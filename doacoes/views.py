@@ -16,6 +16,8 @@ from .serializers import (
     ReceptorSerializer, PontoColetaSerializer, ItemDoacaoSerializer,
     InteresseSerializer, MensagemSerializer
 )
+import logging
+from rest_framework.exceptions import ValidationError
 
 
 def haversine_distance(lat1, lon1, lat2, lon2):
@@ -172,8 +174,22 @@ class ItemDoacaoViewSet(viewsets.ModelViewSet):
     ordering_fields = ['data_criacao', 'quantidade']
 
     def perform_create(self, serializer):
-        doador = Doador.objects.get(usuario__user=self.request.user)
+        usuario = Usuario.objects.get(user=self.request.user)
+        doador, _ = Doador.objects.get_or_create(
+            usuario=usuario,
+            defaults={
+                'cpf': f'{self.request.user.id:011d}',
+            },
+        )
         serializer.save(doador=doador)
+
+    def create(self, request, *args, **kwargs):
+        try:
+            return super().create(request, *args, **kwargs)
+        except ValidationError as e:
+            logger = logging.getLogger(__name__)
+            logger.error('ItemDoacao create validation error: %s; request data: %s', e.detail, request.data)
+            return Response(e.detail, status=status.HTTP_400_BAD_REQUEST)
 
     @action(detail=True, methods=['post'], permission_classes=[permissions.IsAuthenticated])
     def expressar_interesse(self, request, pk=None):
@@ -276,6 +292,7 @@ def registro(request):
     email = request.data.get('email')
     password = request.data.get('password')
     first_name = request.data.get('first_name', '')
+    tipo = request.data.get('tipo', 'doador')
 
     if not username or not email or not password:
         return Response({'detail': 'username, email e password são obrigatórios'}, status=status.HTTP_400_BAD_REQUEST)
@@ -293,9 +310,20 @@ def registro(request):
 
         usuario = Usuario.objects.create(
             user=user,
-            tipo='doador',
+            tipo=tipo if tipo in ['doador', 'receptor'] else 'doador',
             aceite_termos=True
         )
+
+        if usuario.tipo == 'doador':
+            Doador.objects.get_or_create(
+                usuario=usuario,
+                defaults={'cpf': f'{user.id:011d}'}
+            )
+        else:
+            Receptor.objects.get_or_create(
+                usuario=usuario,
+                defaults={'tipo': 'pessoa'}
+            )
 
         refresh = RefreshToken.for_user(user)
         return Response({
@@ -303,7 +331,8 @@ def registro(request):
             'refresh': str(refresh),
             'user': {
                 'username': user.username,
-                'email': user.email
+                'email': user.email,
+                'tipo': usuario.tipo
             }
         }, status=status.HTTP_201_CREATED)
     except Exception as e:

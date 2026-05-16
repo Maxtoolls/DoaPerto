@@ -104,27 +104,6 @@ class PontoColetaSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'data_criacao', 'responsavel_username']
 
 
-class ItemDoacaoSerializer(serializers.ModelSerializer):
-    doador_nome = serializers.CharField(
-        source='doador.usuario.user.get_full_name',
-        read_only=True
-    )
-    categoria_nome = serializers.CharField(
-        source='categoria.nome',
-        read_only=True
-    )
-
-    class Meta:
-        model = ItemDoacao
-        fields = [
-            'id', 'doador', 'doador_nome', 'categoria', 'categoria_nome',
-            'titulo', 'descricao', 'quantidade', 'unidade', 'status',
-            'receptor_confirmado', 'ponto_coleta', 'pode_retirar_diretamente',
-            'imagem', 'data_criacao', 'data_expiracao'
-        ]
-        read_only_fields = ['id', 'data_criacao', 'status']
-
-
 class InteresseSerializer(serializers.ModelSerializer):
     item_titulo = serializers.CharField(source='item.titulo', read_only=True)
     receptor_nome = serializers.CharField(
@@ -139,6 +118,38 @@ class InteresseSerializer(serializers.ModelSerializer):
             'status', 'mensagem_inicial', 'data_criacao', 'data_atualizacao'
         ]
         read_only_fields = ['id', 'data_criacao', 'data_atualizacao']
+
+
+class ItemDoacaoSerializer(serializers.ModelSerializer):
+    doador_nome = serializers.CharField(
+        source='doador.usuario.user.get_full_name',
+        read_only=True
+    )
+    categoria_nome = serializers.CharField(
+        source='categoria.nome',
+        read_only=True
+    )
+    receptor_confirmado_nome = serializers.CharField(
+        source='receptor_confirmado.usuario.user.get_full_name',
+        read_only=True
+    )
+    ponto_coleta_nome = serializers.CharField(
+        source='ponto_coleta.nome',
+        read_only=True
+    )
+    interesses = InteresseSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = ItemDoacao
+        fields = [
+            'id', 'doador', 'doador_nome', 'categoria', 'categoria_nome',
+            'titulo', 'descricao', 'quantidade', 'unidade', 'status',
+            'receptor_confirmado', 'receptor_confirmado_nome',
+            'ponto_coleta', 'ponto_coleta_nome', 'pode_retirar_diretamente',
+                'imagem', 'data_criacao', 'data_expiracao', 'interesses'
+        ]
+        read_only_fields = ['id', 'data_criacao', 'status', 'doador']
+
 
 
 class MensagemSerializer(serializers.ModelSerializer):

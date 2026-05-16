@@ -1,9 +1,11 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
+import apiClient from './api/client';
 import './App.css';
 
 function Navbar({ currentPage, setCurrentPage, user, setUser, setToken }) {
   const handleLogout = () => {
     localStorage.removeItem('token');
+    localStorage.removeItem('access_token');
     setToken(null);
     setUser(null);
     setCurrentPage('home');
@@ -300,6 +302,37 @@ function Home({ setCurrentPage }) {
   );
 }
 
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error, info) {
+    console.error('ErrorBoundary caught:', error, info);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ padding: '2rem', textAlign: 'center' }}>
+          <h2>Ocorreu um erro ao carregar a aplicação.</h2>
+          <pre style={{ whiteSpace: 'pre-wrap', textAlign: 'left', maxWidth: 800, margin: '1rem auto' }}>
+            {String(this.state.error)}
+          </pre>
+          <p>Abra o console do navegador para mais detalhes.</p>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
 function Dashboard({ user, setCurrentPage, token }) {
   return (
     <div style={{ backgroundColor: '#f5f5f5', minHeight: '100vh' }}>
@@ -421,37 +454,49 @@ function MeusItens({ token, setCurrentPage }) {
     unidade: 'unidade'
   });
   const [categorias, setCategorias] = useState([]);
+  const [instituicoes, setInstituicoes] = useState([]);
+  const [destinoTipo, setDestinoTipo] = useState('direto');
+  const [instituicaoSelecionada, setInstituicaoSelecionada] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [feedback, setFeedback] = useState('');
+  const [openInteresses, setOpenInteresses] = useState({});
 
   useEffect(() => {
-    carregarItens();
+    if (token) {
+      carregarItens();
+    } else {
+      setLoading(false);
+    }
     carregarCategorias();
+    carregarInstituicoes();
   }, [token]);
 
   const carregarItens = async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/itens-doacao/meus_itens/', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setItens(data);
-      }
-      setLoading(false);
+      const response = await apiClient.get('/itens-doacao/meus_itens/');
+      setItens(response.data.results || response.data);
     } catch (err) {
       console.error('Erro ao carregar itens:', err);
+    } finally {
       setLoading(false);
     }
   };
 
   const carregarCategorias = async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/categorias/');
-      if (response.ok) {
-        const data = await response.json();
-        setCategorias(data.results || data);
-      }
+      const response = await apiClient.get('/categorias/');
+      setCategorias(response.data.results || response.data);
     } catch (err) {
       console.error('Erro ao carregar categorias:', err);
+    }
+  };
+
+  const carregarInstituicoes = async () => {
+    try {
+      const response = await apiClient.get('/receptores/');
+      setInstituicoes(response.data.results || response.data);
+    } catch (err) {
+      console.error('Erro ao carregar instituições:', err);
     }
   };
 
@@ -459,34 +504,63 @@ function MeusItens({ token, setCurrentPage }) {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
+  const handleDestinoChange = (e) => {
+    const value = e.target.value;
+    setDestinoTipo(value);
+    if (value !== 'instituicao') {
+      setInstituicaoSelecionada('');
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-    try {
-      const response = await fetch('http://localhost:8000/api/itens-doacao/', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          ...formData,
-          categoria: formData.categoria_id
-        })
-      });
+    setSaving(true);
+    setFeedback('');
 
-      if (response.ok) {
-        setFormData({
-          titulo: '',
-          descricao: '',
-          categoria_id: '',
-          quantidade: 1,
-          unidade: 'unidade'
-        });
-        setShowForm(false);
-        carregarItens();
-      }
+    if (destinoTipo === 'instituicao' && !instituicaoSelecionada) {
+      setFeedback('Selecione uma instituição cadastrada para continuar.');
+      setSaving(false);
+      return;
+    }
+
+    try {
+      const payload = {
+        titulo: String(formData.titulo),
+        descricao: String(formData.descricao),
+        quantidade: Number(formData.quantidade) || 1,
+        unidade: String(formData.unidade) || 'unidade',
+        pode_retirar_diretamente: destinoTipo !== 'instituicao',
+      };
+
+      if (formData.categoria_id) payload.categoria = Number(formData.categoria_id);
+      if (destinoTipo === 'instituicao' && instituicaoSelecionada) payload.receptor_confirmado = Number(instituicaoSelecionada);
+      // only include ponto_coleta if selected (not used currently)
+
+      console.debug('Publicando item - payload:', payload);
+
+      await apiClient.post('/itens-doacao/', payload);
+
+      setFormData({
+        titulo: '',
+        descricao: '',
+        categoria_id: '',
+        quantidade: 1,
+        unidade: 'unidade'
+      });
+      setDestinoTipo('direto');
+      setInstituicaoSelecionada('');
+      setFeedback('Item publicado com sucesso. Você pode cadastrar outro em seguida.');
+      await carregarItens();
     } catch (err) {
+      // log full response body for debugging
+      console.debug('Erro ao criar item - response status:', err.response?.status, 'data:', err.response?.data);
+      const detail = err.response?.data?.detail;
+      const fieldErrors = err.response?.data;
+      const message = detail || (fieldErrors ? JSON.stringify(fieldErrors) : 'Erro ao criar item.');
+      setFeedback(message);
       console.error('Erro ao criar item:', err);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -571,6 +645,18 @@ function MeusItens({ token, setCurrentPage }) {
             boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
           }}>
             <h3 style={{ color: '#333', marginBottom: '1.5rem' }}>Adicionar Novo Item</h3>
+            {feedback && (
+              <div style={{
+                marginBottom: '1rem',
+                padding: '0.9rem 1rem',
+                borderRadius: '8px',
+                background: feedback.includes('sucesso') ? '#E8F5E9' : '#FFF3E0',
+                color: feedback.includes('sucesso') ? '#2E7D32' : '#A15C00',
+                border: `1px solid ${feedback.includes('sucesso') ? '#A5D6A7' : '#FFD59E'}`
+              }}>
+                {feedback}
+              </div>
+            )}
             <form onSubmit={handleSubmit} style={{ display: 'grid', gap: '1rem' }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                 <div>
@@ -616,6 +702,68 @@ function MeusItens({ token, setCurrentPage }) {
                   </select>
                 </div>
               </div>
+
+              <div>
+                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '600', color: '#333' }}>Destino da doação</label>
+                <div style={{ display: 'grid', gap: '0.75rem' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <input
+                      type="radio"
+                      name="destinoTipo"
+                      value="direto"
+                      checked={destinoTipo === 'direto'}
+                      onChange={handleDestinoChange}
+                    />
+                    Disponibilizar para doação direta
+                  </label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <input
+                      type="radio"
+                      name="destinoTipo"
+                      value="instituicao"
+                      checked={destinoTipo === 'instituicao'}
+                      onChange={handleDestinoChange}
+                    />
+                    Entregar para instituição cadastrada
+                  </label>
+                </div>
+              </div>
+
+              {destinoTipo === 'instituicao' && (
+                <div>
+                  <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '600', color: '#333' }}>Instituição cadastrada</label>
+                  <select
+                    value={instituicaoSelecionada}
+                    onChange={(e) => setInstituicaoSelecionada(e.target.value)}
+                    required
+                    style={{
+                      width: '100%',
+                      padding: '0.75rem',
+                      border: '1px solid #ddd',
+                      borderRadius: '6px',
+                      fontSize: '0.95rem',
+                      boxSizing: 'border-box',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <option value="">Selecione uma instituição</option>
+                    {instituicoes.map((instituicao) => {
+                      const nome = instituicao?.usuario?.user?.first_name || instituicao?.usuario?.user?.username || 'Instituição';
+                      const tipo = instituicao?.tipo ? ` - ${instituicao.tipo}` : '';
+                      return (
+                        <option key={instituicao.id} value={instituicao.id}>
+                          {nome}{tipo}
+                        </option>
+                      );
+                    })}
+                  </select>
+                  {instituicoes.length === 0 && (
+                    <p style={{ marginTop: '0.5rem', color: '#999', fontSize: '0.9rem' }}>
+                      Nenhuma instituição cadastrada encontrada no momento.
+                    </p>
+                  )}
+                </div>
+              )}
 
               <div>
                 <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '600', color: '#333' }}>Descrição</label>
@@ -685,6 +833,7 @@ function MeusItens({ token, setCurrentPage }) {
 
               <button
                 type="submit"
+                disabled={saving}
                 style={{
                   background: '#FF9500',
                   color: 'white',
@@ -692,11 +841,11 @@ function MeusItens({ token, setCurrentPage }) {
                   padding: '0.9rem',
                   borderRadius: '6px',
                   fontWeight: 'bold',
-                  cursor: 'pointer',
+                  cursor: saving ? 'not-allowed' : 'pointer',
                   fontSize: '0.95rem'
                 }}
               >
-                ✓ Publicar Item
+                {saving ? 'Publicando...' : '✓ Publicar Item'}
               </button>
             </form>
           </div>
@@ -763,16 +912,56 @@ function MeusItens({ token, setCurrentPage }) {
                 <div style={{ padding: '1.5rem', flex: 1, display: 'flex', flexDirection: 'column' }}>
                   <div style={{ marginBottom: '0.5rem' }}>
                     <span style={{ background: '#FFF3E0', color: '#FF9500', padding: '0.3rem 0.8rem', borderRadius: '20px', fontSize: '0.8rem', fontWeight: 'bold' }}>
-                      {item.categoria}
+                      {item.categoria_nome || item.categoria}
                     </span>
                   </div>
                   <h3 style={{ color: '#333', marginBottom: '0.5rem', margin: '0.5rem 0' }}>{item.titulo}</h3>
                   <p style={{ color: '#666', fontSize: '0.9rem', marginBottom: '1rem', flex: 1 }}>
                     {item.descricao}
                   </p>
+                  <p style={{ color: '#666', fontSize: '0.9rem', marginBottom: '0.5rem' }}>
+                    {item.receptor_confirmado_nome
+                      ? `Destino: ${item.receptor_confirmado_nome}`
+                      : item.ponto_coleta_nome
+                        ? `Destino: ${item.ponto_coleta_nome}`
+                        : 'Destino: doação direta'}
+                  </p>
                   <p style={{ color: '#999', fontSize: '0.85rem', marginBottom: '1rem' }}>
                     📅 {new Date(item.data_criacao).toLocaleDateString('pt-BR')}
                   </p>
+
+                  {item.interesses && item.interesses.length > 0 && (
+                    <div style={{ marginBottom: '1rem' }}>
+                      <button
+                        onClick={() => setOpenInteresses((s) => ({ ...s, [item.id]: !s[item.id] }))}
+                        style={{
+                          background: 'transparent',
+                          color: '#FF9500',
+                          border: '1px solid #FF9500',
+                          padding: '0.5rem 0.75rem',
+                          borderRadius: '6px',
+                          fontWeight: '600',
+                          cursor: 'pointer',
+                          fontSize: '0.85rem',
+                          marginBottom: '0.5rem'
+                        }}
+                      >
+                        {openInteresses[item.id] ? 'Ocultar interessados' : `Mostrar ${item.interesses.length} interessado(s)`}
+                      </button>
+
+                      {openInteresses[item.id] && (
+                        <div style={{ marginTop: '0.5rem', display: 'grid', gap: '0.5rem' }}>
+                          {item.interesses.map((it) => (
+                            <div key={it.id} style={{ background: '#FAFAFA', padding: '0.6rem', borderRadius: '8px', border: '1px solid #eee' }}>
+                              <div style={{ fontWeight: '700', color: '#333' }}>{it.receptor_nome || it.receptor}</div>
+                              {it.mensagem_inicial && <div style={{ color: '#666', fontSize: '0.9rem' }}>{it.mensagem_inicial}</div>}
+                              <div style={{ marginTop: '0.25rem' }}><span style={{ background: '#FFF3E0', color: '#A15C00', padding: '0.2rem 0.5rem', borderRadius: '6px', fontSize: '0.75rem' }}>{it.status}</span></div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   <div style={{ display: 'flex', gap: '0.5rem' }}>
                     <button
@@ -817,57 +1006,505 @@ function MeusItens({ token, setCurrentPage }) {
   );
 }
 
-function Explorar() {
-  const [doacoes, setDoacoes] = useState([
-    { id: 1, item: 'Cesta Básica', categoria: 'Alimento', quantidade: 2, data_criacao: '2026-05-10' },
-    { id: 2, item: 'Livros', categoria: 'Educação', quantidade: 5, data_criacao: '2026-05-10' },
-    { id: 3, item: 'Roupas', categoria: 'Vestuário', quantidade: 10, data_criacao: '2026-05-09' },
-  ]);
-  const [loading, setLoading] = useState(false);
+function ItemInteresses({ itemId, setCurrentPage }) {
+  const [item, setItem] = useState(null);
+  const [interesses, setInteresses] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  // Carregar doações da API
-  const carregarDoacoes = () => {
+  useEffect(() => {
+    const carregarDetalhes = async () => {
+      setLoading(true);
+      try {
+        const [itemResponse, interessesResponse] = await Promise.all([
+          apiClient.get(`/itens-doacao/${itemId}/`),
+          apiClient.get(`/interesses/?item=${itemId}`),
+        ]);
+
+        setItem(itemResponse.data);
+        setInteresses(interessesResponse.data.results || interessesResponse.data);
+      } catch (err) {
+        console.error('Erro ao carregar interesses do item:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    carregarDetalhes();
+  }, [itemId]);
+
+  return (
+    <div style={{ backgroundColor: '#f5f5f5', minHeight: '100vh' }}>
+      <section style={{
+        background: 'linear-gradient(135deg, #FF9500 0%, #FFB84D 100%)',
+        color: 'white',
+        padding: '3rem 2rem'
+      }}>
+        <div style={{ maxWidth: '1200px', margin: '0 auto', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+          <div>
+            <h2 style={{ fontSize: '2rem', marginBottom: '0.5rem', margin: 0 }}>👀 Interesses do Item</h2>
+            <p style={{ fontSize: '0.95rem', opacity: 0.9, margin: '0.5rem 0 0 0' }}>Acompanhe quem demonstrou interesse nesta doação</p>
+          </div>
+          <button
+            onClick={() => setCurrentPage('meus-itens')}
+            style={{
+              background: 'white',
+              color: '#FF9500',
+              border: 'none',
+              padding: '0.75rem 1.5rem',
+              borderRadius: '6px',
+              fontWeight: 'bold',
+              cursor: 'pointer',
+              fontSize: '0.95rem'
+            }}
+          >
+            ← Voltar para meus itens
+          </button>
+        </div>
+      </section>
+
+      <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '2rem' }}>
+        {loading ? (
+          <div style={{ textAlign: 'center', padding: '2rem', background: 'white', borderRadius: '12px', color: '#666' }}>
+            Carregando detalhes do item...
+          </div>
+        ) : !item ? (
+          <div style={{ textAlign: 'center', padding: '2rem', background: 'white', borderRadius: '12px' }}>
+            <p style={{ color: '#666' }}>Item não encontrado.</p>
+            <button
+              onClick={() => setCurrentPage('meus-itens')}
+              style={{
+                marginTop: '1rem',
+                background: '#FF9500',
+                color: 'white',
+                border: 'none',
+                padding: '0.75rem 1.5rem',
+                borderRadius: '6px',
+                fontWeight: 'bold',
+                cursor: 'pointer'
+              }}
+            >
+              Voltar
+            </button>
+          </div>
+        ) : (
+          <>
+            <div style={{ background: 'white', borderRadius: '12px', padding: '2rem', marginBottom: '2rem', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}>
+              <h3 style={{ color: '#333', marginBottom: '0.75rem' }}>{item.titulo}</h3>
+              <p style={{ color: '#666', marginBottom: '0.5rem' }}>{item.descricao}</p>
+              <p style={{ color: '#999', marginBottom: '0' }}>
+                Categoria: {item.categoria_nome || item.categoria} | Quantidade: {item.quantidade} {item.unidade}
+              </p>
+            </div>
+
+            <div style={{ display: 'grid', gap: '1rem' }}>
+              {interesses.length === 0 ? (
+                <div style={{ background: 'white', borderRadius: '12px', padding: '2rem', textAlign: 'center', color: '#666' }}>
+                  Nenhum interesse registrado ainda.
+                </div>
+              ) : (
+                interesses.map((interesse) => (
+                  <div key={interesse.id} style={{ background: 'white', borderRadius: '12px', padding: '1.5rem', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
+                    <h4 style={{ color: '#333', marginBottom: '0.5rem' }}>{interesse.receptor_nome || 'Receptor'}</h4>
+                    <p style={{ color: '#666', marginBottom: '0.75rem' }}>{interesse.mensagem_inicial || 'Sem mensagem inicial.'}</p>
+                    <span style={{ background: '#FFF3E0', color: '#FF9500', padding: '0.3rem 0.8rem', borderRadius: '20px', fontSize: '0.8rem', fontWeight: 'bold' }}>
+                      {interesse.status}
+                    </span>
+                  </div>
+                ))
+              )}
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function MeusInteresses({ setCurrentPage }) {
+  const [interesses, setInteresses] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const carregarInteresses = async () => {
+      try {
+        const response = await apiClient.get('/interesses/');
+        setInteresses(response.data.results || response.data);
+      } catch (err) {
+        console.error('Erro ao carregar meus interesses:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    carregarInteresses();
+  }, []);
+
+  return (
+    <div style={{ backgroundColor: '#f5f5f5', minHeight: '100vh' }}>
+      <section style={{
+        background: 'linear-gradient(135deg, #FF9500 0%, #FFB84D 100%)',
+        color: 'white',
+        padding: '3rem 2rem'
+      }}>
+        <div style={{ maxWidth: '1200px', margin: '0 auto', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+          <div>
+            <h2 style={{ fontSize: '2rem', marginBottom: '0.5rem', margin: 0 }}>💬 Meus Interesses</h2>
+            <p style={{ fontSize: '0.95rem', opacity: 0.9, margin: '0.5rem 0 0 0' }}>Veja os itens nos quais você demonstrou interesse</p>
+          </div>
+          <button
+            onClick={() => setCurrentPage('dashboard')}
+            style={{
+              background: 'white',
+              color: '#FF9500',
+              border: 'none',
+              padding: '0.75rem 1.5rem',
+              borderRadius: '6px',
+              fontWeight: 'bold',
+              cursor: 'pointer',
+              fontSize: '0.95rem'
+            }}
+          >
+            ← Voltar ao dashboard
+          </button>
+        </div>
+      </section>
+
+      <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '2rem' }}>
+        {loading ? (
+          <div style={{ textAlign: 'center', padding: '2rem', background: 'white', borderRadius: '12px', color: '#666' }}>
+            Carregando interesses...
+          </div>
+        ) : interesses.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '3rem 2rem', background: 'white', borderRadius: '12px' }}>
+            <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>💭</div>
+            <h3 style={{ color: '#333', marginBottom: '0.5rem' }}>Nenhum interesse registrado</h3>
+            <p style={{ color: '#666', marginBottom: '1.5rem' }}>Explore itens disponíveis e clique em Expressar Interesse.</p>
+            <button
+              onClick={() => setCurrentPage('explorar')}
+              style={{
+                background: '#FF9500',
+                color: 'white',
+                border: 'none',
+                padding: '0.75rem 1.5rem',
+                borderRadius: '6px',
+                fontWeight: 'bold',
+                cursor: 'pointer'
+              }}
+            >
+              Explorar itens
+            </button>
+          </div>
+        ) : (
+          <div style={{ display: 'grid', gap: '1rem' }}>
+            {interesses.map((interesse) => (
+              <div key={interesse.id} style={{ background: 'white', borderRadius: '12px', padding: '1.5rem', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
+                <h4 style={{ color: '#333', marginBottom: '0.5rem' }}>{interesse.item_titulo || 'Item'}</h4>
+                <p style={{ color: '#666', marginBottom: '0.75rem' }}>{interesse.mensagem_inicial || 'Sem mensagem inicial.'}</p>
+                <span style={{ background: '#FFF3E0', color: '#FF9500', padding: '0.3rem 0.8rem', borderRadius: '20px', fontSize: '0.8rem', fontWeight: 'bold' }}>
+                  {interesse.status}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ExpressarInteresse({ setCurrentPage, token }) {
+  const [itens, setItens] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [categoria, setCategoria] = useState('');
+  const [categorias, setCategorias] = useState([]);
+  const [enviandoId, setEnviandoId] = useState(null);
+  const [feedback, setFeedback] = useState('');
+  const [interessesEnviados, setInteressesEnviados] = useState([]);
+
+  useEffect(() => {
+    carregarCategorias();
+  }, []);
+
+  useEffect(() => {
+    carregarItens();
+  }, [categoria]);
+
+  const carregarCategorias = async () => {
+    try {
+      const response = await apiClient.get('/categorias/');
+      setCategorias(response.data.results || response.data);
+    } catch (err) {
+      console.error('Erro ao carregar categorias para expressar interesse:', err);
+    }
+  };
+
+  const carregarItens = async () => {
     setLoading(true);
-    fetch('http://localhost:8000/api/doacoes/')
-      .then(res => res.json())
-      .then(data => {
-        console.log('Doações carregadas:', data);
-        if (data.results) {
-          setDoacoes(data.results);
-        } else if (Array.isArray(data)) {
-          setDoacoes(data);
-        }
-        setLoading(false);
-      })
-      .catch(err => {
-        console.error('Erro ao carregar doações:', err);
-        setLoading(false);
+    try {
+      const url = categoria ? `/itens-doacao/?categoria=${categoria}` : '/itens-doacao/';
+      const response = await apiClient.get(url);
+      setItens(response.data.results || response.data);
+    } catch (err) {
+      console.error('Erro ao carregar itens para expressar interesse:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleExpressarInteresse = async (item) => {
+    if (!token) {
+      setCurrentPage('login');
+      return;
+    }
+
+    setEnviandoId(item.id);
+    setFeedback('');
+
+    try {
+      await apiClient.post(`/itens-doacao/${item.id}/expressar_interesse/`, {
+        mensagem: 'Tenho interesse neste item.',
       });
+      setInteressesEnviados((atual) => [...atual, item.id]);
+      setFeedback(`Interesse enviado para "${item.titulo}".`);
+    } catch (err) {
+      const mensagem = err.response?.data?.error || 'Não foi possível expressar interesse neste item.';
+      setFeedback(mensagem);
+    } finally {
+      setEnviandoId(null);
+    }
+  };
+
+  return (
+    <div style={{ backgroundColor: '#f5f5f5', minHeight: '100vh' }}>
+      <section style={{
+        background: 'linear-gradient(135deg, #FF9500 0%, #FFB84D 100%)',
+        color: 'white',
+        padding: '3rem 2rem'
+      }}>
+        <div style={{ maxWidth: '1200px', margin: '0 auto', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+          <div>
+            <h2 style={{ fontSize: '2rem', marginBottom: '0.5rem', margin: 0 }}>💬 Expressar Interesse</h2>
+            <p style={{ fontSize: '0.95rem', opacity: 0.9, margin: '0.5rem 0 0 0' }}>Veja os itens disponíveis e manifeste interesse em poucos cliques</p>
+          </div>
+          <button
+            onClick={() => setCurrentPage('explorar')}
+            style={{
+              background: 'white',
+              color: '#FF9500',
+              border: 'none',
+              padding: '0.75rem 1.5rem',
+              borderRadius: '6px',
+              fontWeight: 'bold',
+              cursor: 'pointer',
+              fontSize: '0.95rem'
+            }}
+          >
+            ← Voltar para explorar
+          </button>
+        </div>
+      </section>
+
+      <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '2rem' }}>
+        {!token && (
+          <div style={{ background: 'white', borderRadius: '12px', padding: '2rem', textAlign: 'center', boxShadow: '0 4px 12px rgba(0,0,0,0.08)', marginBottom: '1.5rem' }}>
+            <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🔐</div>
+            <h3 style={{ color: '#333', marginBottom: '0.5rem' }}>Faça login para expressar interesse</h3>
+            <p style={{ color: '#666', marginBottom: '1.5rem' }}>
+              Você pode ver a página, mas o envio do interesse exige autenticação.
+            </p>
+            <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center', flexWrap: 'wrap' }}>
+              <button
+                onClick={() => setCurrentPage('login')}
+                style={{
+                  background: '#FF9500',
+                  color: 'white',
+                  border: 'none',
+                  padding: '0.75rem 1.5rem',
+                  borderRadius: '6px',
+                  fontWeight: 'bold',
+                  cursor: 'pointer'
+                }}
+              >
+                Ir para login
+              </button>
+              <button
+                onClick={() => setCurrentPage('explorar')}
+                style={{
+                  background: 'transparent',
+                  color: '#FF9500',
+                  border: '1px solid #FF9500',
+                  padding: '0.75rem 1.5rem',
+                  borderRadius: '6px',
+                  fontWeight: 'bold',
+                  cursor: 'pointer'
+                }}
+              >
+                Voltar para explorar
+              </button>
+            </div>
+          </div>
+        )}
+
+        {feedback && (
+          <div style={{
+            marginBottom: '1rem',
+            padding: '0.9rem 1rem',
+            borderRadius: '8px',
+            background: feedback.toLowerCase().includes('não foi possível') || feedback.toLowerCase().includes('apenas') || feedback.toLowerCase().includes('já expressou') ? '#FFF3E0' : '#E8F5E9',
+            color: feedback.toLowerCase().includes('não foi possível') || feedback.toLowerCase().includes('apenas') || feedback.toLowerCase().includes('já expressou') ? '#A15C00' : '#2E7D32',
+            border: `1px solid ${feedback.toLowerCase().includes('não foi possível') || feedback.toLowerCase().includes('apenas') || feedback.toLowerCase().includes('já expressou') ? '#FFD59E' : '#A5D6A7'}`
+          }}>
+            {feedback}
+          </div>
+        )}
+
+        <div style={{ marginBottom: '1.5rem', maxWidth: '320px' }}>
+          <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '600', color: '#333' }}>Filtrar por categoria</label>
+          <select
+            value={categoria}
+            onChange={(e) => setCategoria(e.target.value)}
+            style={{ width: '100%', padding: '0.75rem', border: '1px solid #ddd', borderRadius: '6px' }}
+          >
+            <option value="">Todas as categorias</option>
+            {categorias.map((cat) => (
+              <option key={cat.id} value={cat.id}>{cat.nome}</option>
+            ))}
+          </select>
+        </div>
+
+        {token && loading ? (
+          <div style={{ textAlign: 'center', padding: '2rem', color: '#666', background: 'white', borderRadius: '12px' }}>Carregando itens...</div>
+        ) : token && itens.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '2rem', color: '#666', background: 'white', borderRadius: '12px' }}>
+            <p style={{ margin: 0 }}>Nenhum item encontrado</p>
+          </div>
+        ) : token ? (
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+            gap: '1.5rem'
+          }}>
+            {itens.map((item) => {
+              const interestAlreadySent = interessesEnviados.includes(item.id);
+
+              return (
+                <div
+                  key={item.id}
+                  style={{
+                    background: 'white',
+                    borderRadius: '12px',
+                    overflow: 'hidden',
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                    display: 'flex',
+                    flexDirection: 'column'
+                  }}
+                >
+                  <div style={{ background: '#FFF3E0', padding: '1rem', display: 'flex', justifyContent: 'space-between', gap: '0.75rem' }}>
+                    <span style={{ background: '#FF9500', color: 'white', padding: '0.3rem 0.8rem', borderRadius: '20px', fontSize: '0.8rem', fontWeight: 'bold' }}>
+                      {item.categoria_nome || item.categoria}
+                    </span>
+                    <span style={{ background: '#FFB84D', color: 'white', padding: '0.3rem 0.8rem', borderRadius: '20px', fontSize: '0.8rem', fontWeight: 'bold' }}>
+                      {item.quantidade}x {item.unidade}
+                    </span>
+                  </div>
+
+                  <div style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', flex: 1 }}>
+                    <h3 style={{ color: '#333', marginBottom: '0.5rem', marginTop: 0 }}>{item.titulo}</h3>
+                    <p style={{ color: '#666', fontSize: '0.9rem', marginBottom: '1rem', lineHeight: '1.5', flex: 1 }}>
+                      {item.descricao}
+                    </p>
+                    <p style={{ color: '#999', fontSize: '0.85rem', marginBottom: '1rem' }}>
+                      📅 {new Date(item.data_criacao).toLocaleDateString('pt-BR')}
+                    </p>
+                    <button
+                      onClick={() => handleExpressarInteresse(item)}
+                      disabled={enviandoId === item.id || interestAlreadySent}
+                      style={{
+                        width: '100%',
+                        padding: '0.75rem',
+                        background: interestAlreadySent ? '#9CCC65' : '#FF9500',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '6px',
+                        fontWeight: 'bold',
+                        cursor: enviandoId === item.id || interestAlreadySent ? 'not-allowed' : 'pointer',
+                        opacity: enviandoId === item.id ? 0.8 : 1
+                      }}
+                    >
+                      {enviandoId === item.id ? 'Enviando...' : interestAlreadySent ? 'Interesse enviado' : 'Expressar Interesse'}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function Explorar({ setCurrentPage, token }) {
+  const [itens, setItens] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [categoria, setCategoria] = useState('');
+  const [categorias, setCategorias] = useState([]);
+
+  useEffect(() => {
+    carregarCategorias();
+  }, []);
+
+  useEffect(() => {
+    carregarItens();
+  }, [categoria]);
+
+  const carregarCategorias = async () => {
+    try {
+      const response = await apiClient.get('/categorias/');
+      setCategorias(response.data.results || response.data);
+    } catch (err) {
+      console.error('Erro ao carregar categorias:', err);
+    }
+  };
+
+  const carregarItens = async () => {
+    setLoading(true);
+    try {
+      const url = categoria ? `/itens-doacao/?categoria=${categoria}` : '/itens-doacao/';
+      const response = await apiClient.get(url);
+      setItens(response.data.results || response.data);
+    } catch (err) {
+      console.error('Erro ao carregar itens:', err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
     <div style={{ padding: '2rem', maxWidth: '1200px', margin: '0 auto' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
         <h1 style={{ color: '#FF9500', margin: 0 }}>Explorar Doações</h1>
-        <button
-          onClick={carregarDoacoes}
-          style={{
-            padding: '0.6rem 1.2rem',
-            background: '#FF9500',
-            color: 'white',
-            border: 'none',
-            borderRadius: '6px',
-            fontWeight: 'bold',
-            cursor: 'pointer'
-          }}
-        >
-          {loading ? 'Carregando...' : 'Carregar da API'}
-        </button>
       </div>
 
-      {doacoes.length === 0 ? (
+      <div style={{ marginBottom: '1.5rem', maxWidth: '320px' }}>
+        <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '600', color: '#333' }}>Filtrar por categoria</label>
+        <select
+          value={categoria}
+          onChange={(e) => setCategoria(e.target.value)}
+          style={{ width: '100%', padding: '0.75rem', border: '1px solid #ddd', borderRadius: '6px' }}
+        >
+          <option value="">Todas as categorias</option>
+          {categorias.map((cat) => (
+            <option key={cat.id} value={cat.id}>{cat.nome}</option>
+          ))}
+        </select>
+      </div>
+
+      {loading ? (
+        <div style={{ textAlign: 'center', padding: '2rem', color: '#666' }}>Carregando itens...</div>
+      ) : itens.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '2rem', color: '#666' }}>
-          <p>Nenhuma doação encontrada</p>
+          <p>Nenhum item encontrado</p>
         </div>
       ) : (
         <div style={{
@@ -875,9 +1512,9 @@ function Explorar() {
           gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
           gap: '1.5rem'
         }}>
-          {doacoes.map(doacao => (
+          {itens.map(item => (
             <div
-              key={doacao.id}
+              key={item.id}
               style={{
                 background: 'white',
                 borderRadius: '12px',
@@ -887,27 +1524,37 @@ function Explorar() {
             >
               <div style={{ background: '#FFF3E0', padding: '1rem', display: 'flex', justifyContent: 'space-between' }}>
                 <span style={{ background: '#FF9500', color: 'white', padding: '0.3rem 0.8rem', borderRadius: '20px', fontSize: '0.8rem', fontWeight: 'bold' }}>
-                  {doacao.categoria}
+                  {item.categoria_nome || item.categoria}
                 </span>
                 <span style={{ background: '#FFB84D', color: 'white', padding: '0.3rem 0.8rem', borderRadius: '20px', fontSize: '0.8rem', fontWeight: 'bold' }}>
-                  {doacao.quantidade}x
+                  {item.quantidade}x
                 </span>
               </div>
               <div style={{ padding: '1.5rem' }}>
-                <h3 style={{ color: '#333', marginBottom: '0.5rem' }}>{doacao.item}</h3>
+                <h3 style={{ color: '#333', marginBottom: '0.5rem' }}>{item.titulo}</h3>
                 <p style={{ color: '#666', fontSize: '0.9rem', marginBottom: '1rem' }}>
-                  Disponível desde {new Date(doacao.data_criacao).toLocaleDateString('pt-BR')}
+                  {item.receptor_confirmado_nome
+                    ? `Destino: ${item.receptor_confirmado_nome}`
+                    : item.ponto_coleta_nome
+                      ? `Destino: ${item.ponto_coleta_nome}`
+                      : 'Destino: doação direta'}
                 </p>
-                <button style={{
-                  width: '100%',
-                  padding: '0.75rem',
-                  background: '#FF9500',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '6px',
-                  fontWeight: 'bold',
-                  cursor: 'pointer'
-                }}>
+                <p style={{ color: '#999', fontSize: '0.85rem', marginBottom: '1rem' }}>
+                  Disponível desde {new Date(item.data_criacao).toLocaleDateString('pt-BR')}
+                </p>
+                <button
+                  onClick={() => setCurrentPage('expressar-interesse')}
+                  style={{
+                    width: '100%',
+                    padding: '0.75rem',
+                    background: '#FF9500',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '6px',
+                    fontWeight: 'bold',
+                    cursor: 'pointer'
+                  }}
+                >
                   Expressar Interesse
                 </button>
               </div>
@@ -931,23 +1578,22 @@ function Login({ setCurrentPage, setUser, setToken }) {
     setErro('');
 
     try {
-      const response = await fetch('http://localhost:8000/api/token/', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password })
-      });
-
-      if (!response.ok) {
-        throw new Error('Usuário ou senha inválidos');
-      }
-
-      const data = await response.json();
+      const response = await apiClient.post('/token/', { username, password });
+      const data = response.data;
       localStorage.setItem('token', data.access);
+      localStorage.setItem('access_token', data.access);
       setToken(data.access);
       setUser({ username, email: username });
       setCurrentPage('dashboard');
     } catch (err) {
-      setErro(err.message);
+      console.debug('Login error', err);
+      if (err.response) {
+        setErro(err.response.data?.detail || err.response.data?.error || 'Usuário ou senha inválidos');
+      } else if (err.request) {
+        setErro('Falha de rede ao conectar ao servidor (verifique se o backend está rodando e CORS está configurado).');
+      } else {
+        setErro('Erro ao tentar logar.');
+      }
     } finally {
       setLoading(false);
     }
@@ -1041,7 +1687,8 @@ function Registro({ setCurrentPage, setUser, setToken }) {
     username: '',
     email: '',
     password: '',
-    first_name: ''
+    first_name: '',
+    tipo: 'doador'
   });
   const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState('');
@@ -1062,19 +1709,10 @@ function Registro({ setCurrentPage, setUser, setToken }) {
     }
 
     try {
-      const response = await fetch('http://localhost:8000/api/auth/registro/', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData)
-      });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.detail || 'Erro ao criar conta');
-      }
-
-      const data = await response.json();
+      const response = await apiClient.post('/auth/registro/', formData);
+      const data = response.data;
       localStorage.setItem('token', data.access);
+      localStorage.setItem('access_token', data.access);
       setToken(data.access);
       setUser({ username: formData.username, email: formData.email });
       setCurrentPage('dashboard');
@@ -1105,6 +1743,44 @@ function Registro({ setCurrentPage, setUser, setToken }) {
         <h2 style={{ textAlign: 'center', color: '#333', marginBottom: '2rem' }}>🤝 Crie sua conta</h2>
         {erro && <div style={{ background: '#ffebee', color: '#c62828', padding: '0.75rem', borderRadius: '6px', marginBottom: '1rem', fontSize: '0.9rem' }}>{erro}</div>}
         <form onSubmit={handleSubmit}>
+          <div style={{ marginBottom: '1rem' }}>
+            <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '600', color: '#333' }}>Tipo de conta</label>
+            <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                onClick={() => setFormData({ ...formData, tipo: 'doador' })}
+                style={{
+                  flex: '1 1 140px',
+                  padding: '0.8rem 1rem',
+                  borderRadius: '8px',
+                  border: formData.tipo === 'doador' ? '2px solid #FF9500' : '1px solid #ddd',
+                  background: formData.tipo === 'doador' ? '#FFF3E0' : 'white',
+                  color: '#333',
+                  fontWeight: '700',
+                  cursor: 'pointer'
+                }}
+              >
+                Sou doador
+              </button>
+              <button
+                type="button"
+                onClick={() => setFormData({ ...formData, tipo: 'receptor' })}
+                style={{
+                  flex: '1 1 140px',
+                  padding: '0.8rem 1rem',
+                  borderRadius: '8px',
+                  border: formData.tipo === 'receptor' ? '2px solid #FF9500' : '1px solid #ddd',
+                  background: formData.tipo === 'receptor' ? '#FFF3E0' : 'white',
+                  color: '#333',
+                  fontWeight: '700',
+                  cursor: 'pointer'
+                }}
+              >
+                Sou receptor
+              </button>
+            </div>
+          </div>
+
           <div style={{ marginBottom: '1rem' }}>
             <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '600', color: '#333' }}>Nome</label>
             <input
@@ -1211,19 +1887,34 @@ function Registro({ setCurrentPage, setUser, setToken }) {
 export default function App() {
   const [currentPage, setCurrentPage] = useState('home');
   const [user, setUser] = useState(null);
-  const [token, setToken] = useState(() => localStorage.getItem('token'));
+  const [token, setToken] = useState(() => localStorage.getItem('token') || localStorage.getItem('access_token'));
+  const isItemPage = currentPage.startsWith('item-');
+  const isKnownPage = ['home', 'explorar', 'login', 'registro', 'dashboard', 'meus-itens', 'meus-interesses', 'expressar-interesse'].includes(currentPage) || isItemPage;
+  const requiresToken = currentPage === 'dashboard' || currentPage === 'meus-itens' || isItemPage;
+  const showHome = !isKnownPage || currentPage === 'home' || (requiresToken && !token);
+
+  useEffect(() => {
+    if (!isKnownPage || (requiresToken && !token)) {
+      setCurrentPage('home');
+    }
+  }, [isKnownPage, requiresToken, token, setCurrentPage]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
       <Navbar currentPage={currentPage} setCurrentPage={setCurrentPage} user={user} setUser={setUser} setToken={setToken} />
-      <main style={{ flex: 1 }}>
-        {currentPage === 'home' && <Home setCurrentPage={setCurrentPage} />}
-        {currentPage === 'explorar' && <Explorar />}
-        {currentPage === 'login' && <Login setCurrentPage={setCurrentPage} setUser={setUser} setToken={setToken} />}
-        {currentPage === 'registro' && <Registro setCurrentPage={setCurrentPage} setUser={setUser} setToken={setToken} />}
-        {currentPage === 'dashboard' && <Dashboard user={user} setCurrentPage={setCurrentPage} token={token} />}
-        {currentPage === 'meus-itens' && token && <MeusItens token={token} setCurrentPage={setCurrentPage} />}
-      </main>
+      <ErrorBoundary>
+        <main style={{ flex: 1 }}>
+          {showHome && <Home setCurrentPage={setCurrentPage} />}
+          {currentPage === 'explorar' && <Explorar setCurrentPage={setCurrentPage} token={token} />}
+          {currentPage === 'login' && <Login setCurrentPage={setCurrentPage} setUser={setUser} setToken={setToken} />}
+          {currentPage === 'registro' && <Registro setCurrentPage={setCurrentPage} setUser={setUser} setToken={setToken} />}
+          {currentPage === 'dashboard' && token && <Dashboard user={user} setCurrentPage={setCurrentPage} token={token} />}
+          {currentPage === 'meus-itens' && token && <MeusItens token={token} setCurrentPage={setCurrentPage} />}
+          {currentPage === 'meus-interesses' && token && <MeusInteresses setCurrentPage={setCurrentPage} />}
+          {currentPage === 'expressar-interesse' && <ExpressarInteresse setCurrentPage={setCurrentPage} token={token} />}
+          {isItemPage && token && <ItemInteresses itemId={currentPage.replace('item-', '')} setCurrentPage={setCurrentPage} />}
+        </main>
+      </ErrorBoundary>
     </div>
   );
 }
