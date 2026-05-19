@@ -245,3 +245,12 @@ npm run build
 ## Suporte
 
 Qualquer dúvida, abra uma issue no repositório.
+
+
+## Resultado:
+
+
+
+https://github.com/user-attachments/assets/a9974cc6-a92f-467b-bdc3-56f2a4799f6f
+
+
