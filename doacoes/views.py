@@ -260,13 +260,20 @@ class ItemDoacaoViewSet(viewsets.ModelViewSet):
         except Doador.DoesNotExist:
             return Response({'error': 'Apenas doadores têm itens'}, status=status.HTTP_403_FORBIDDEN)
 
-
 class InteresseViewSet(viewsets.ModelViewSet):
     queryset = Interesse.objects.all()
     serializer_class = InteresseSerializer
     permission_classes = [permissions.IsAuthenticated]
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ['status', 'item']
+
+    def get_queryset(self):
+        usuario = self.request.user
+
+        return Interesse.objects.filter(
+            Q(receptor__usuario__user=usuario) |
+            Q(item__doador__usuario__user=usuario)
+        ).distinct()
 
     @action(detail=True, methods=['post'])
     def confirmar(self, request, pk=None):
