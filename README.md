@@ -6,6 +6,8 @@ que ilustra bem a dinâmica de praticidade, conscientização e interação entr
 
 <img width="1269" height="496" alt="Captura de tela de 2026-05-18 22-00-39" src="https://github.com/user-attachments/assets/71afde12-16b6-4756-af5c-00e6562ea2d6" />
 
+## Personas e Jornadas consideradas no projeto (Atualização para novas funcionalidades)
+
 ## Stack
 - **Backend:** Django 4.2 + Django REST Framework + JWT
 - **Frontend:** React 18 + Vite + Leaflet
