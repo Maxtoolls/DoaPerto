@@ -8,6 +8,13 @@ que ilustra bem a dinâmica de praticidade, conscientização e interação entr
 
 ## Personas e Jornadas consideradas no projeto (Atualização para novas funcionalidades)
 
+<img width="2800" height="1318" alt="eac2f3f5-59ce-4ac5-85bb-e8e6d33ba77d" src="https://github.com/user-attachments/assets/c5527525-54b6-4bda-82c7-936b5ad87b25" />
+
+
+
+
+
+
 ## Stack
 - **Backend:** Django 4.2 + Django REST Framework + JWT
 - **Frontend:** React 18 + Vite + Leaflet
