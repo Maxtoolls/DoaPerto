@@ -1,7 +1,7 @@
 from django.contrib import admin
 from .models import (
     Doacao, CategoriaItem, Usuario, Doador, Receptor, PontoColeta,
-    ItemDoacao, Interesse, Mensagem
+    ItemDoacao, Interesse, Mensagem, EventoDoacao
 )
 
 
@@ -47,6 +47,14 @@ class PontoColetaAdmin(admin.ModelAdmin):
     list_filter = ['tipo', 'ativo', 'data_criacao']
     search_fields = ['nome', 'endereco', 'email']
     filter_horizontal = ['tipos_item_aceitos']
+
+
+@admin.register(EventoDoacao)
+class EventoDoacaoAdmin(admin.ModelAdmin):
+    list_display = ['titulo', 'entidade_nome', 'entidade_tipo', 'data_inicio', 'status']
+    list_filter = ['entidade_tipo', 'status', 'data_inicio']
+    search_fields = ['titulo', 'entidade_nome', 'endereco', 'descricao']
+    filter_horizontal = ['categorias']
 
 
 @admin.register(ItemDoacao)

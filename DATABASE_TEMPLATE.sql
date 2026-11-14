@@ -110,6 +110,38 @@ CREATE TABLE IF NOT EXISTS doacoes_pontocoleta_tipos_item_aceitos (
     UNIQUE(pontocoleta_id, categoriaitem_id)
 );
 
+-- TABELA: Eventos de Doação
+-- Campanhas temporárias organizadas por academias, ONGs, mercados,
+-- associações ou outras entidades da comunidade.
+CREATE TABLE IF NOT EXISTS doacoes_eventodoacao (
+    id INTEGER PRIMARY KEY AUTO_INCREMENT,
+    organizador_id INTEGER NOT NULL,
+    entidade_nome VARCHAR(200) NOT NULL,
+    entidade_tipo VARCHAR(30) NOT NULL,
+    titulo VARCHAR(200) NOT NULL,
+    descricao TEXT NOT NULL,
+    endereco VARCHAR(255) NOT NULL,
+    latitude DECIMAL(9, 6),
+    longitude DECIMAL(9, 6),
+    data_inicio DATETIME NOT NULL,
+    data_fim DATETIME NOT NULL,
+    horario VARCHAR(100),
+    capacidade VARCHAR(100),
+    status VARCHAR(20) DEFAULT 'planejado',
+    data_criacao DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (organizador_id) REFERENCES doacoes_usuario(id)
+);
+
+-- TABELA: Relação Evento-Categorias
+CREATE TABLE IF NOT EXISTS doacoes_eventodoacao_categorias (
+    id INTEGER PRIMARY KEY AUTO_INCREMENT,
+    eventodoacao_id INTEGER NOT NULL,
+    categoriaitem_id INTEGER NOT NULL,
+    FOREIGN KEY (eventodoacao_id) REFERENCES doacoes_eventodoacao(id),
+    FOREIGN KEY (categoriaitem_id) REFERENCES doacoes_categoriaitem(id),
+    UNIQUE(eventodoacao_id, categoriaitem_id)
+);
+
 -- TABELA: Itens de Doação
 CREATE TABLE IF NOT EXISTS doacoes_itemdoacao (
     id INTEGER PRIMARY KEY AUTO_INCREMENT,
@@ -119,6 +151,10 @@ CREATE TABLE IF NOT EXISTS doacoes_itemdoacao (
     descricao TEXT NOT NULL,
     quantidade INTEGER NOT NULL,
     unidade VARCHAR(50) DEFAULT 'unidade',
+    estado_conservacao VARCHAR(20) DEFAULT 'usado',
+    valor_contribuicao DECIMAL(10, 2),
+    data_disponibilidade DATE,
+    tipo_entrega VARCHAR(20) DEFAULT 'retirada',
     status VARCHAR(20) DEFAULT 'disponivel',
     receptor_confirmado_id INTEGER,
     ponto_coleta_id INTEGER,
@@ -193,11 +229,20 @@ CREATE INDEX idx_pontocoleta_tipo ON doacoes_pontocoleta(tipo);
 CREATE INDEX idx_pontocoleta_latitude_longitude ON doacoes_pontocoleta(latitude, longitude);
 CREATE INDEX idx_pontocoleta_ativo ON doacoes_pontocoleta(ativo);
 
+-- Índices em EventoDoacao
+CREATE INDEX idx_eventodoacao_organizador ON doacoes_eventodoacao(organizador_id);
+CREATE INDEX idx_eventodoacao_tipo ON doacoes_eventodoacao(entidade_tipo);
+CREATE INDEX idx_eventodoacao_status ON doacoes_eventodoacao(status);
+CREATE INDEX idx_eventodoacao_data_inicio ON doacoes_eventodoacao(data_inicio);
+
 -- Índices em ItemDoacao
 CREATE INDEX idx_itemdoacao_doador ON doacoes_itemdoacao(doador_id);
 CREATE INDEX idx_itemdoacao_categoria ON doacoes_itemdoacao(categoria_id);
 CREATE INDEX idx_itemdoacao_status ON doacoes_itemdoacao(status);
 CREATE INDEX idx_itemdoacao_data_criacao ON doacoes_itemdoacao(data_criacao);
+CREATE INDEX idx_itemdoacao_conservacao ON doacoes_itemdoacao(estado_conservacao);
+CREATE INDEX idx_itemdoacao_data_disponibilidade ON doacoes_itemdoacao(data_disponibilidade);
+CREATE INDEX idx_itemdoacao_tipo_entrega ON doacoes_itemdoacao(tipo_entrega);
 
 -- Índices em Mensagem
 CREATE INDEX idx_mensagem_remetente_data ON doacoes_mensagem(remetente_id, data_criacao);
@@ -231,6 +276,17 @@ INSERT INTO doacoes_doacao (item, descricao, categoria, quantidade) VALUES
 ('Computador', 'Notebook funcional', 'Eletrônicos', 1),
 ('Sofá', 'Sofá cinza 3 lugares', 'Móveis', 1);
 
+-- Evento de exemplo
+-- INSERT INTO doacoes_eventodoacao
+-- (organizador_id, entidade_nome, entidade_tipo, titulo, descricao,
+--  endereco, data_inicio, data_fim, horario, status)
+-- VALUES
+-- (1, 'Academia Impacto', 'academia', 'Campanha do Agasalho',
+--  'Recebimento de roupas e cobertores em bom estado.',
+--  'Rua das Flores, 100 - Centro',
+--  '2026-06-01 08:00:00', '2026-06-15 18:00:00',
+--  'Segunda a sábado, das 8h às 18h', 'aberto');
+
 -- ============================================================
 -- VIEWS ÚTEIS
 -- ============================================================
@@ -243,6 +299,7 @@ SELECT
     (SELECT COUNT(*) FROM doacoes_receptor WHERE ativo = TRUE) as receptores_ativos,
     (SELECT COUNT(*) FROM doacoes_itemdoacao WHERE status = 'disponivel') as itens_disponiveis,
     (SELECT COUNT(*) FROM doacoes_pontocoleta WHERE ativo = TRUE) as pontos_ativos,
+    (SELECT COUNT(*) FROM doacoes_eventodoacao WHERE status = 'aberto') as eventos_abertos,
     (SELECT COUNT(*) FROM doacoes_itemdoacao WHERE status = 'doado') as total_doacoes;
 
 -- View: Itens Disponíveis com Informações do Doador
@@ -281,6 +338,27 @@ LEFT JOIN doacoes_categoriaitem c ON ptc.categoriaitem_id = c.id
 WHERE pc.ativo = TRUE
 GROUP BY pc.id;
 
+-- View: Eventos de Doação Publicados
+CREATE VIEW IF NOT EXISTS vw_eventos_doacao_abertos AS
+SELECT
+    e.id,
+    e.titulo,
+    e.entidade_nome,
+    e.entidade_tipo,
+    e.descricao,
+    e.endereco,
+    e.latitude,
+    e.longitude,
+    e.data_inicio,
+    e.data_fim,
+    e.horario,
+    e.capacidade,
+    e.status
+FROM doacoes_eventodoacao e
+WHERE e.status IN ('planejado', 'aberto')
+  AND e.data_fim >= CURRENT_TIMESTAMP
+ORDER BY e.data_inicio;
+
 -- ============================================================
 -- QUERIES ÚTEIS
 -- ============================================================
@@ -309,6 +387,14 @@ GROUP BY pc.id;
 -- LEFT JOIN doacoes_interesse i ON r.id = i.receptor_id
 -- GROUP BY r.id ORDER BY total_interesses DESC;
 
+-- Eventos abertos próximos de uma entidade/localização
+-- A aplicação calcula a distância com Haversine quando recebe lat, lon e distancia_km.
+-- SELECT id, titulo, entidade_nome, endereco, data_inicio, data_fim
+-- FROM doacoes_eventodoacao
+-- WHERE status = 'aberto'
+--   AND data_fim >= CURRENT_TIMESTAMP
+-- ORDER BY data_inicio;
+
 -- ============================================================
 -- LGPD - Queries para Conformidade
 -- ============================================================
@@ -331,8 +417,9 @@ GROUP BY pc.id;
 --
 -- 1. Este template usa SQLite/MySQL (compatível com Django)
 -- 2. As migrações Django já criaram essas tabelas
--- 3. Os índices melhoram performance em buscas por geolocalização
--- 4. As views facilitam relatórios e dashboards
--- 5. LGPD compliant com campos de consentimento
+-- 3. As migrações 0006 e 0007 adicionam filtros avançados e eventos de doação
+-- 4. Os índices melhoram performance em buscas e listagens
+-- 5. As views facilitam relatórios e dashboards
+-- 6. LGPD compliant com campos de consentimento
 --
 -- ============================================================

@@ -2,7 +2,7 @@ from rest_framework import serializers
 from django.contrib.auth.models import User
 from .models import (
     Doacao, CategoriaItem, Usuario, Doador, Receptor, PontoColeta,
-    ItemDoacao, Interesse, Mensagem
+    ItemDoacao, Interesse, Mensagem, EventoDoacao
 )
 
 
@@ -104,6 +104,30 @@ class PontoColetaSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'data_criacao', 'responsavel_username']
 
 
+class EventoDoacaoSerializer(serializers.ModelSerializer):
+    organizador_nome = serializers.CharField(
+        source='organizador.user.get_full_name', read_only=True
+    )
+    categorias = CategoriaItemSerializer(many=True, read_only=True)
+    categorias_ids = serializers.PrimaryKeyRelatedField(
+        queryset=CategoriaItem.objects.all(),
+        many=True,
+        source='categorias',
+        write_only=True,
+        required=False,
+    )
+
+    class Meta:
+        model = EventoDoacao
+        fields = [
+            'id', 'organizador', 'organizador_nome', 'entidade_nome',
+            'entidade_tipo', 'titulo', 'descricao', 'endereco', 'latitude',
+            'longitude', 'data_inicio', 'data_fim', 'horario', 'capacidade',
+            'status', 'categorias', 'categorias_ids', 'data_criacao',
+        ]
+        read_only_fields = ['id', 'organizador', 'organizador_nome', 'data_criacao']
+
+
 class InteresseSerializer(serializers.ModelSerializer):
     item_titulo = serializers.CharField(source='item.titulo', read_only=True)
     receptor_nome = serializers.CharField(
@@ -144,6 +168,8 @@ class ItemDoacaoSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'doador', 'doador_nome', 'categoria', 'categoria_nome',
             'titulo', 'descricao', 'quantidade', 'unidade', 'status',
+            'estado_conservacao', 'valor_contribuicao', 'data_disponibilidade',
+            'tipo_entrega',
             'receptor_confirmado', 'receptor_confirmado_nome',
             'ponto_coleta', 'ponto_coleta_nome', 'pode_retirar_diretamente',
                 'imagem', 'data_criacao', 'data_expiracao', 'interesses'

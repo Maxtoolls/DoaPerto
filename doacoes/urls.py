@@ -4,7 +4,7 @@ from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from .views import (
     DoacaoViewSet, CategoriaItemViewSet, UsuarioViewSet, DoadorViewSet,
     ReceptorViewSet, PontoColetaViewSet, ItemDoacaoViewSet,
-    InteresseViewSet, MensagemViewSet, registro
+    InteresseViewSet, MensagemViewSet, EventoDoacaoViewSet, registro
 )
 
 router = DefaultRouter()
@@ -15,6 +15,7 @@ router.register(r'doadores', DoadorViewSet)
 router.register(r'receptores', ReceptorViewSet)
 router.register(r'pontos-coleta', PontoColetaViewSet)
 router.register(r'itens-doacao', ItemDoacaoViewSet)
+router.register(r'eventos-doacao', EventoDoacaoViewSet)
 router.register(r'interesses', InteresseViewSet)
 router.register(r'mensagens', MensagemViewSet)
 

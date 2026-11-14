@@ -1,5 +1,8 @@
 # 📊 DoaPerto - Documentação do Banco de Dados
 
+> Atualizada conforme os modelos e migrações atuais do projeto. A última migração
+> documentada é `doacoes.0007_eventodoacao`.
+
 ## Visão Geral
 
 O DoaPerto utiliza um banco de dados relacional (SQLite em desenvolvimento, compatível com PostgreSQL/MySQL em produção) com foco em:
@@ -45,7 +48,7 @@ Perfil de Doador
 |-------|------|-----------|
 | id | INT | PK |
 | usuario_id | INT | FK para doacoes_usuario (unique) |
-| cpf | VARCHAR(14) | CPF criptografado |
+| cpf | VARCHAR(14) | CPF; exposto somente para escrita pela API |
 | faixa_idade | VARCHAR(20) | '18-25', '25-35', etc |
 | faixa_renda | VARCHAR(20) | 'até 1000', '1000-3000', etc |
 | biografia | TEXT | Sobre o doador |
@@ -117,7 +120,32 @@ Pontos de Coleta e Distribuição
 
 ---
 
-### 7. **doacoes_itemdoacao**
+### 7. **doacoes_eventodoacao**
+Eventos temporários de arrecadação organizados por entidades da comunidade.
+
+| Campo | Tipo | Descrição |
+|-------|------|-----------|
+| id | INT | PK |
+| organizador_id | INT | FK para doacoes_usuario |
+| entidade_nome | VARCHAR(200) | Academia, ONG, mercado ou outra entidade |
+| entidade_tipo | VARCHAR(30) | academia, ong, supermercado, associacao, igreja ou outro |
+| titulo | VARCHAR(200) | Nome da campanha |
+| descricao | TEXT | O que será arrecadado e orientações |
+| endereco | VARCHAR(255) | Local de recebimento |
+| latitude | DECIMAL(9,6) | Coordenada opcional do evento |
+| longitude | DECIMAL(9,6) | Coordenada opcional do evento |
+| data_inicio | DATETIME | Início da arrecadação |
+| data_fim | DATETIME | Encerramento da arrecadação |
+| horario | VARCHAR(100) | Horário de atendimento |
+| capacidade | VARCHAR(100) | Capacidade ou observações logísticas |
+| status | VARCHAR(20) | planejado, aberto ou encerrado |
+| data_criacao | DATETIME | Data de publicação |
+
+**Relacionamento:** `categorias` é ManyToMany com `doacoes_categoriaitem`.
+
+---
+
+### 8. **doacoes_itemdoacao**
 Itens Específicos para Doação
 
 | Campo | Tipo | Descrição |
@@ -129,6 +157,10 @@ Itens Específicos para Doação
 | descricao | TEXT | Descrição detalhada |
 | quantidade | INT | Quantidade disponível |
 | unidade | VARCHAR(50) | 'unidade', 'kg', 'litro', etc |
+| estado_conservacao | VARCHAR(20) | 'novo', 'seminovo' ou 'usado' |
+| valor_contribuicao | DECIMAL(10,2) | Contribuição voluntária; nulo representa gratuita |
+| data_disponibilidade | DATE | Data disponível para retirada |
+| tipo_entrega | VARCHAR(20) | retirada, entrega_gratis ou taxa_combinada |
 | status | VARCHAR(20) | 'disponivel', 'interessado', 'doado', 'cancelado' |
 | receptor_confirmado_id | INT | FK para doacoes_receptor (quem vai receber) |
 | ponto_coleta_id | INT | FK para doacoes_pontocoleta (local de coleta) |
@@ -140,7 +172,7 @@ Itens Específicos para Doação
 
 ---
 
-### 8. **doacoes_interesse**
+### 9. **doacoes_interesse**
 Interesse de Receptor em Item
 
 | Campo | Tipo | Descrição |
@@ -157,7 +189,7 @@ Interesse de Receptor em Item
 
 ---
 
-### 9. **doacoes_mensagem**
+### 10. **doacoes_mensagem**
 Chat entre Doador e Receptor
 
 | Campo | Tipo | Descrição |
@@ -174,7 +206,7 @@ Chat entre Doador e Receptor
 
 ---
 
-### 10. **doacoes_doacao**
+### 11. **doacoes_doacao**
 API Simples (compatibilidade com versão anterior)
 
 | Campo | Tipo | Descrição |
@@ -201,11 +233,29 @@ doacoes_doador (1) -------- (M) doacoes_itemdoacao
 doacoes_receptor (1) -------- (M) doacoes_interesse
 doacoes_itemdoacao (1) -------- (M) doacoes_interesse
 
+doacoes_usuario (1) -------- (M) doacoes_eventodoacao
+doacoes_eventodoacao (M) -------- (M) doacoes_categoriaitem
+
 doacoes_usuario (1) -------- (M) doacoes_mensagem (remetente)
 doacoes_usuario (1) -------- (M) doacoes_mensagem (destinatario)
 
 doacoes_usuario (1) -------- (M) doacoes_usuario (referido_por - self-reference)
 ```
+
+---
+
+## 🔌 Endpoints relacionados
+
+| Método | Endpoint | Acesso | Uso |
+|--------|----------|--------|-----|
+| GET | `/api/eventos-doacao/` | Público | Listar campanhas |
+| POST | `/api/eventos-doacao/` | Autenticado | Criar campanha |
+| GET | `/api/eventos-doacao/meus_eventos/` | Autenticado | Listar campanhas do usuário |
+| GET/POST | `/api/pontos-coleta/` | Leitura pública / escrita autenticada | Gerenciar pontos |
+| GET | `/api/itens-doacao/?search=...` | Leitura pública | Buscar itens |
+
+Eventos são sempre associados ao usuário autenticado no backend; o cliente não pode
+informar outro `organizador_id` na criação.
 
 ---
 
@@ -359,7 +409,8 @@ Os modelos estão em `doacoes/models.py` e mapeiam perfeitamente para essa estru
 ## 📝 Próximas Fases
 
 ### Fase 3
-- [ ] Implementar busca por geolocalização real
+- [x] Implementar busca por geolocalização real para itens e pontos
+- [x] Filtros avançados de itens e campanhas de arrecadação
 - [ ] Melhorar índices para performance
 - [ ] Adicionar triggers para auditoria
 
@@ -371,5 +422,6 @@ Os modelos estão em `doacoes/models.py` e mapeiam perfeitamente para essa estru
 ---
 
 **Criado em:** 2026-05-10
-**Versão:** 1.0
+**Atualizado em:** 2026-11-14
+**Versão:** 1.1
 **Compatibilidade:** SQLite, PostgreSQL, MySQL

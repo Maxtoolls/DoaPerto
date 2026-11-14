@@ -27,6 +27,35 @@ que ilustra bem a dinâmica de praticidade, conscientização e interação entr
 - `ItemDoacaoSerializer` expõe `interesses` para que o doador veja quem manifestou interesse.
 - Frontend: telas de `Registro` com botões "Sou doador" / "Sou receptor"; `Meus Itens` mostra interessados inline; `Expressar Interesse` página/ação.
 
+## Melhorias de UX baseadas nas personas
+
+As jornadas descritas no projeto integrador orientaram uma atualização visual e funcional
+sem alterar os endpoints existentes:
+
+- **Receptores (Beatriz):** a tela **Explorar** agora combina busca por palavra-chave,
+  categoria e disponibilidade. Isso reduz resultados irrelevantes e facilita encontrar
+  itens específicos, como material escolar, sem expor dados sensíveis.
+- **Doadores (Marcelo e Juliana):** a navegação ganhou hierarquia mais clara e a
+  experiência mantém o fluxo de publicação, acompanhamento de interessados e escolha de
+  destino da doação.
+- **Pontos de coleta (Rafael):** o acesso a **Explorar** permanece destacado e a
+  identidade visual reforça localização, confiança e organização da entrega.
+- **Todos os perfis:** o layout foi modernizado com contraste acessível, estados vazios
+  orientativos, foco visível em campos e adaptação para telas pequenas.
+
+Os filtros avançados agora disponíveis em **Explorar** são: palavra-chave, categoria,
+status, estado de conservação, contribuição voluntária máxima, data limite para retirada,
+tipo de entrega, ponto de coleta e distância. A distância solicita a localização do
+navegador e considera a localização cadastrada do doador. Ao publicar um item, o doador
+também pode informar conservação, contribuição, data e modalidade de entrega.
+
+### Como usar a busca de doações
+
+1. Acesse **Explorar**.
+2. Digite um termo (título ou descrição), escolha uma categoria e selecione o status.
+3. Use **Expressar Interesse** para iniciar o contato. O envio continua exigindo login,
+   preservando a proteção do fluxo atual.
+
 ## Infraestrutura (Docker + CI)
 Adicionei uma infraestrutura mínima para desenvolvimento e integração contínua:
 
@@ -150,6 +179,8 @@ npm run dev
 - `GET/POST /api/doadores/` - Doadores
 - `GET/POST /api/receptores/` - Receptores
 - `GET/POST /api/pontos-coleta/` - Pontos de coleta
+- `GET/POST /api/eventos-doacao/` - Campanhas e eventos de arrecadação
+- `GET /api/eventos-doacao/meus_eventos/` - Eventos criados pelo usuário autenticado
 - `GET/POST /api/itens-doacao/` - Itens para doação
 - `GET/POST /api/mensagens/` - Mensagens
 - `GET/POST /api/interesses/` - Expressar interesse
@@ -166,6 +197,8 @@ npm run dev
 - **Doador** - Pessoa que doa (FK Usuario)
 - **Receptor** - Pessoa/ONG que recebe (FK Usuario)
 - **PontoColeta** - Local de coleta
+- **EventoDoacao** - Campanha temporária organizada por uma academia, ONG, mercado,
+  associação ou outra entidade
 - **ItemDoacao** - Item disponível para doação
 - **Interesse** - Interesse do receptor em um item
 - **Mensagem** - Chat entre usuários
@@ -185,6 +218,7 @@ npm run dev
 - [x] Cadastro de Doador e Receptor
 - [x] Mapa com Leaflet
 - [x] Componentes reutilizáveis
+- [x] Eventos de doação com período, entidade, endereço e categorias aceitas
 
 ### Fase 3 (MVP Features)
 - [ ] Geolocalização completa do usuário
@@ -207,6 +241,34 @@ npm run dev
 - ⏳ Implementar soft delete e anonimização
 
 ## Como Testar
+
+### Criar um evento de doação
+
+1. Faça login e acesse **Eventos** na barra de navegação.
+2. Selecione **Criar evento**.
+3. Informe a entidade organizadora, período de arrecadação, endereço, horário e
+   categorias aceitas.
+4. Publique o evento. Ele ficará disponível na listagem pública para a comunidade.
+
+Exemplo de criação via API:
+
+```bash
+curl -X POST http://localhost:8000/api/eventos-doacao/ \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "entidade_nome": "Academia Impacto",
+    "entidade_tipo": "academia",
+    "titulo": "Campanha do agasalho",
+    "descricao": "Recebimento de roupas e cobertores em bom estado.",
+    "endereco": "Rua das Flores, 100 - Centro",
+    "data_inicio": "2026-06-01T08:00:00-03:00",
+    "data_fim": "2026-06-15T18:00:00-03:00",
+    "horario": "Segunda a sábado, das 8h às 18h",
+    "status": "aberto",
+    "categorias_ids": []
+  }'
+```
 
 1. **Registre um usuário:**
    - Acesse http://localhost:5173/registro

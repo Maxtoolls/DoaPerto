@@ -147,12 +147,64 @@ class PontoColeta(models.Model):
         return f"{self.nome} ({self.get_tipo_display()})"
 
 
+class EventoDoacao(models.Model):
+    TIPO_ENTIDADE = [
+        ('academia', 'Academia'),
+        ('ong', 'ONG'),
+        ('supermercado', 'Supermercado'),
+        ('associacao', 'Associação'),
+        ('igreja', 'Igreja'),
+        ('outro', 'Outra entidade'),
+    ]
+    STATUS = [
+        ('planejado', 'Planejado'),
+        ('aberto', 'Recebendo doações'),
+        ('encerrado', 'Encerrado'),
+    ]
+
+    organizador = models.ForeignKey(
+        Usuario, on_delete=models.CASCADE, related_name='eventos_doacao'
+    )
+    entidade_nome = models.CharField(max_length=200)
+    entidade_tipo = models.CharField(max_length=30, choices=TIPO_ENTIDADE)
+    titulo = models.CharField(max_length=200)
+    descricao = models.TextField()
+    endereco = models.CharField(max_length=255)
+    latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    data_inicio = models.DateTimeField()
+    data_fim = models.DateTimeField()
+    horario = models.CharField(max_length=100, blank=True)
+    capacidade = models.CharField(max_length=100, blank=True)
+    status = models.CharField(max_length=20, choices=STATUS, default='planejado')
+    categorias = models.ManyToManyField(CategoriaItem, blank=True)
+    data_criacao = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Evento de doação'
+        verbose_name_plural = 'Eventos de doação'
+        ordering = ['data_inicio']
+
+    def __str__(self):
+        return f'{self.titulo} - {self.entidade_nome}'
+
+
 class ItemDoacao(models.Model):
     STATUS = [
         ('disponivel', 'Disponível'),
         ('interessado', 'Com Interessado'),
         ('doado', 'Doado'),
         ('cancelado', 'Cancelado'),
+    ]
+    ESTADO_CONSERVACAO = [
+        ('novo', 'Novo'),
+        ('seminovo', 'Seminovo'),
+        ('usado', 'Usado'),
+    ]
+    TIPO_ENTREGA = [
+        ('retirada', 'Retirada presencial'),
+        ('entrega_gratis', 'Entrega grátis'),
+        ('taxa_combinada', 'Taxa combinada'),
     ]
 
     doador = models.ForeignKey(Doador, on_delete=models.CASCADE, related_name='itens_doacao')
@@ -161,6 +213,16 @@ class ItemDoacao(models.Model):
     descricao = models.TextField()
     quantidade = models.IntegerField(validators=[MinValueValidator(1)])
     unidade = models.CharField(max_length=50, default='unidade')
+    estado_conservacao = models.CharField(
+        max_length=20, choices=ESTADO_CONSERVACAO, default='usado'
+    )
+    valor_contribuicao = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True
+    )
+    data_disponibilidade = models.DateField(null=True, blank=True)
+    tipo_entrega = models.CharField(
+        max_length=20, choices=TIPO_ENTREGA, default='retirada'
+    )
     status = models.CharField(max_length=20, choices=STATUS, default='disponivel')
     receptor_confirmado = models.ForeignKey(Receptor, on_delete=models.SET_NULL, null=True, blank=True)
     ponto_coleta = models.ForeignKey(PontoColeta, on_delete=models.SET_NULL, null=True, blank=True)

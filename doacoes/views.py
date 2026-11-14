@@ -9,14 +9,15 @@ from math import radians, sin, cos, sqrt, atan2
 
 from .models import (
     Doacao, CategoriaItem, Usuario, Doador, Receptor, PontoColeta,
-    ItemDoacao, Interesse, Mensagem
+    ItemDoacao, Interesse, Mensagem, EventoDoacao
 )
 from .serializers import (
     DoacaoSerializer, CategoriaItemSerializer, UsuarioSerializer, DoadorSerializer,
     ReceptorSerializer, PontoColetaSerializer, ItemDoacaoSerializer,
-    InteresseSerializer, MensagemSerializer
+    InteresseSerializer, MensagemSerializer, EventoDoacaoSerializer
 )
 import logging
+from datetime import date
 from rest_framework.exceptions import ValidationError
 
 
@@ -205,9 +206,56 @@ class ItemDoacaoViewSet(viewsets.ModelViewSet):
     serializer_class = ItemDoacaoSerializer
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['categoria', 'status']
+    filterset_fields = [
+        'categoria', 'status', 'estado_conservacao', 'tipo_entrega',
+        'data_disponibilidade', 'valor_contribuicao',
+    ]
     search_fields = ['titulo', 'descricao']
     ordering_fields = ['data_criacao', 'quantidade']
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        params = self.request.query_params
+
+        valor_max = params.get('valor_max')
+        data_ate = params.get('data_ate')
+        if valor_max:
+            if valor_max == '0':
+                queryset = queryset.filter(
+                    Q(valor_contribuicao__isnull=True) | Q(valor_contribuicao=0)
+                )
+            else:
+                queryset = queryset.filter(
+                    valor_contribuicao__isnull=False,
+                    valor_contribuicao__lte=valor_max,
+                )
+        if data_ate:
+            try:
+                queryset = queryset.filter(data_disponibilidade__lte=date.fromisoformat(data_ate))
+            except ValueError:
+                pass
+        if params.get('ponto_coleta') == 'sim':
+            queryset = queryset.filter(ponto_coleta__isnull=False)
+
+        lat, lon, distancia = params.get('lat'), params.get('lon'), params.get('distancia_km')
+        if lat and lon and distancia:
+            try:
+                origem = (float(lat), float(lon))
+                limite = float(distancia)
+                ids = [
+                    item.id for item in queryset.select_related('doador__usuario')
+                    if item.doador.usuario.latitude is not None
+                    and item.doador.usuario.longitude is not None
+                    and haversine_distance(
+                        origem[0], origem[1],
+                        float(item.doador.usuario.latitude),
+                        float(item.doador.usuario.longitude),
+                    ) <= limite
+                ]
+                queryset = queryset.filter(id__in=ids)
+            except (TypeError, ValueError):
+                pass
+        return queryset
 
     def perform_create(self, serializer):
         usuario = Usuario.objects.get(user=self.request.user)
@@ -259,6 +307,25 @@ class ItemDoacaoViewSet(viewsets.ModelViewSet):
             return Response(serializer.data)
         except Doador.DoesNotExist:
             return Response({'error': 'Apenas doadores têm itens'}, status=status.HTTP_403_FORBIDDEN)
+
+
+class EventoDoacaoViewSet(viewsets.ModelViewSet):
+    queryset = EventoDoacao.objects.all()
+    serializer_class = EventoDoacaoSerializer
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ['entidade_tipo', 'status']
+    search_fields = ['titulo', 'descricao', 'entidade_nome', 'endereco']
+    ordering_fields = ['data_inicio', 'data_criacao']
+
+    def perform_create(self, serializer):
+        usuario = Usuario.objects.get(user=self.request.user)
+        serializer.save(organizador=usuario)
+
+    @action(detail=False, methods=['get'], permission_classes=[permissions.IsAuthenticated])
+    def meus_eventos(self, request):
+        eventos = self.get_queryset().filter(organizador__user=request.user)
+        return Response(self.get_serializer(eventos, many=True).data)
 
 
 class InteresseViewSet(viewsets.ModelViewSet):

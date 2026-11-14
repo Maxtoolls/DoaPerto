@@ -12,45 +12,39 @@ function Navbar({ currentPage, setCurrentPage, user, setUser, setToken }) {
   };
 
   return (
-    <nav style={{
-      background: '#FF9500',
-      padding: '1rem 2rem',
-      display: 'flex',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
-    }}>
+    <nav className="topbar">
       <button
         onClick={() => setCurrentPage('home')}
-        style={{
-          fontSize: '1.8rem',
-          background: 'none',
-          border: 'none',
-          color: 'white',
-          cursor: 'pointer',
-          fontWeight: 'bold'
-        }}
+        className="brand"
       >
-        🤝 DoaPerto
+        <span className="brand-mark">+</span>
+        <span>Doa<span className="brand-accent">Perto</span></span>
       </button>
-      <div style={{ display: 'flex', gap: '2rem', color: 'white', alignItems: 'center' }}>
+      <div className="nav-actions">
         <button
           onClick={() => setCurrentPage('explorar')}
-          style={{ color: 'white', background: 'none', border: 'none', fontWeight: '500', cursor: 'pointer', fontSize: '1rem' }}
+          className={`nav-link ${currentPage === 'explorar' ? 'active' : ''}`}
         >
           Explorar
+        </button>
+        <button
+          onClick={() => setCurrentPage('eventos')}
+          className={`nav-link ${currentPage === 'eventos' ? 'active' : ''}`}
+        >
+          Eventos
         </button>
         {user ? (
           <>
             <button
               onClick={() => setCurrentPage('perfil')}
-              style={{ color: 'white', background: 'none', border: 'none', fontWeight: '700', cursor: 'pointer', fontSize: '0.95rem' }}
+              className="profile-chip"
             >
-              👤 {user.username}
+              <span className="avatar">{(user.username || 'U').charAt(0).toUpperCase()}</span>
+              {user.username}
             </button>
             <button
               onClick={handleLogout}
-              style={{ color: 'white', background: 'none', border: 'none', fontWeight: '500', cursor: 'pointer', fontSize: '1rem' }}
+              className="nav-link"
             >
               Sair
             </button>
@@ -59,22 +53,13 @@ function Navbar({ currentPage, setCurrentPage, user, setUser, setToken }) {
           <>
             <button
               onClick={() => setCurrentPage('login')}
-              style={{ color: 'white', background: 'none', border: 'none', fontWeight: '500', cursor: 'pointer', fontSize: '1rem' }}
+              className="nav-link"
             >
               Login
             </button>
             <button
               onClick={() => setCurrentPage('registro')}
-              style={{
-                background: 'white',
-                color: '#FF9500',
-                border: 'none',
-                padding: '0.5rem 1.2rem',
-                borderRadius: '20px',
-                fontWeight: 'bold',
-                cursor: 'pointer',
-                fontSize: '1rem'
-              }}
+              className="nav-cta"
             >
               Registrar
             </button>
@@ -85,21 +70,26 @@ function Navbar({ currentPage, setCurrentPage, user, setUser, setToken }) {
   );
 }
 
-function Card({ icon, title, description }) {
+function Card({ icon, title, description, onClick }) {
   return (
-    <div style={{
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
       background: 'white',
       padding: '2rem',
       borderRadius: '12px',
       textAlign: 'center',
       boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
       flex: 1,
-      minWidth: '200px'
+      minWidth: '200px',
+      border: 'none',
+      cursor: 'pointer'
     }}>
       <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>{icon}</div>
       <h3 style={{ color: '#FF9500', marginBottom: '0.5rem' }}>{title}</h3>
       <p style={{ color: '#666' }}>{description}</p>
-    </div>
+    </button>
   );
 }
 
@@ -135,9 +125,9 @@ function JourneyStep({ number, icon, title }) {
   );
 }
 
-function Home({ setCurrentPage }) {
+function Home({ setCurrentPage, token }) {
   return (
-    <div style={{ backgroundColor: '#f5f5f5', minHeight: '100vh' }}>
+    <div className="home-page" style={{ backgroundColor: '#f5f5f5', minHeight: '100vh' }}>
       {/* Hero Section */}
       <section style={{
         background: 'linear-gradient(135deg, #FF9500 0%, #FFB84D 100%)',
@@ -197,10 +187,10 @@ function Home({ setCurrentPage }) {
           gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
           gap: '2rem'
         }}>
-          <Card icon="🔍" title="Explore" description="Encontre itens e pontos próximos" />
-          <Card icon="❤️" title="Doe" description="Compartilhe com quem precisa" />
-          <Card icon="📍" title="Localize" description="Use geolocalização" />
-          <Card icon="💬" title="Converse" description="Chat com doadores" />
+          <Card icon="🔍" title="Explore" description="Encontre itens e pontos próximos" onClick={() => setCurrentPage('explorar')} />
+          <Card icon="❤️" title="Doe" description="Compartilhe com quem precisa" onClick={() => setCurrentPage(token ? 'meus-itens' : 'registro')} />
+          <Card icon="📍" title="Localize" description="Use geolocalização" onClick={() => setCurrentPage('pontos-coleta')} />
+          <Card icon="💬" title="Converse" description="Chat com doadores" onClick={() => setCurrentPage(token ? 'meus-interesses' : 'login')} />
         </div>
       </section>
 
@@ -303,6 +293,194 @@ function Home({ setCurrentPage }) {
           </button>
         </div>
       </section>
+    </div>
+  );
+}
+
+function PontosColeta({ setCurrentPage }) {
+  const [pontos, setPontos] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const carregar = async () => {
+      try {
+        const resposta = await apiClient.get('/pontos-coleta/');
+        setPontos(resposta.data.results || resposta.data);
+      } catch (err) {
+        console.error('Erro ao carregar pontos de coleta:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    carregar();
+  }, []);
+
+  return (
+    <div className="events-page">
+      <section className="events-hero">
+        <div><span className="eyebrow">Doe presencialmente</span><h1>Pontos de coleta</h1><p>Encontre entidades que recebem doações da comunidade.</p></div>
+        <button type="button" className="button button-light" onClick={() => setCurrentPage('home')}>Voltar</button>
+      </section>
+      <div className="events-content">
+        <div className="section-heading"><span className="eyebrow">Rede comunitária</span><h2>Locais disponíveis</h2></div>
+        {loading ? <div className="state-card">Carregando pontos...</div> : pontos.length === 0 ? <div className="state-card">Nenhum ponto de coleta cadastrado no momento.</div> : (
+          <div className="events-grid">
+            {pontos.map((ponto) => <article className="event-card" key={ponto.id}><div className="event-card-top"><span>{ponto.tipo}</span><strong>Ativo</strong></div><h3>{ponto.nome}</h3><p>{ponto.endereco}</p>{ponto.horarios && <div className="event-details"><span>⏰ {ponto.horarios}</span></div>}{ponto.telefone && <div className="event-details"><span>☎️ {ponto.telefone}</span></div>}</article>)}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function EventosDoacao({ setCurrentPage, token }) {
+  const [eventos, setEventos] = useState([]);
+  const [categorias, setCategorias] = useState([]);
+  const [showForm, setShowForm] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [feedback, setFeedback] = useState('');
+  const [formData, setFormData] = useState({
+    entidade_nome: '',
+    entidade_tipo: 'academia',
+    titulo: '',
+    descricao: '',
+    endereco: '',
+    data_inicio: '',
+    data_fim: '',
+    horario: '',
+    capacidade: '',
+    status: 'aberto',
+    categorias_ids: [],
+  });
+
+  const carregarEventos = async () => {
+    try {
+      const response = await apiClient.get('/eventos-doacao/');
+      setEventos(response.data.results || response.data);
+    } catch (err) {
+      console.error('Erro ao carregar eventos de doação:', err);
+      setFeedback('Não foi possível carregar os eventos agora.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    carregarEventos();
+    apiClient.get('/categorias/')
+      .then((response) => setCategorias(response.data.results || response.data))
+      .catch((err) => console.error('Erro ao carregar categorias do evento:', err));
+  }, []);
+
+  const handleChange = (event) => {
+    const { name, value } = event.target;
+    setFormData((current) => ({ ...current, [name]: value }));
+  };
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    setSaving(true);
+    setFeedback('');
+    try {
+      await apiClient.post('/eventos-doacao/', {
+        ...formData,
+        categorias_ids: formData.categorias_ids.map(Number),
+      });
+      setFeedback('Evento criado! A comunidade já pode encontrá-lo.');
+      setShowForm(false);
+      setFormData((current) => ({
+        ...current,
+        entidade_nome: '',
+        titulo: '',
+        descricao: '',
+        endereco: '',
+        data_inicio: '',
+        data_fim: '',
+        horario: '',
+        capacidade: '',
+        categorias_ids: [],
+      }));
+      await carregarEventos();
+    } catch (err) {
+      setFeedback(err.response?.data?.detail || 'Não foi possível criar o evento. Confira os campos.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const formatarData = (value) => value
+    ? new Date(value).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })
+    : 'Data a definir';
+
+  return (
+    <div className="events-page">
+      <section className="events-hero">
+        <div>
+          <span className="eyebrow">Mobilize sua comunidade</span>
+          <h1>Eventos de doação</h1>
+          <p>Crie um período de arrecadação para sua academia, ONG, mercado ou associação.</p>
+        </div>
+        <div className="events-actions">
+          <button type="button" className="button button-light" onClick={() => setCurrentPage('home')}>Voltar</button>
+          {token ? (
+            <button type="button" className="button button-accent" onClick={() => setShowForm((current) => !current)}>
+              {showForm ? 'Fechar formulário' : 'Criar evento'}
+            </button>
+          ) : (
+            <button type="button" className="button button-accent" onClick={() => setCurrentPage('login')}>Entrar para criar</button>
+          )}
+        </div>
+      </section>
+
+      <div className="events-content">
+        {feedback && <div className="event-feedback">{feedback}</div>}
+        {showForm && token && (
+          <form className="event-form" onSubmit={handleSubmit}>
+            <div className="section-heading">
+              <span className="eyebrow">Novo evento</span>
+              <h2>Organize um ponto de arrecadação</h2>
+            </div>
+            <div className="event-form-grid">
+              <label>Nome da entidade<input name="entidade_nome" value={formData.entidade_nome} onChange={handleChange} required placeholder="Ex.: Academia Impacto" /></label>
+              <label>Tipo de entidade<select name="entidade_tipo" value={formData.entidade_tipo} onChange={handleChange}>
+                <option value="academia">Academia</option><option value="ong">ONG</option><option value="supermercado">Supermercado</option><option value="associacao">Associação</option><option value="igreja">Igreja</option><option value="outro">Outra entidade</option>
+              </select></label>
+              <label className="field-wide">Nome do evento<input name="titulo" value={formData.titulo} onChange={handleChange} required placeholder="Ex.: Campanha do agasalho" /></label>
+              <label className="field-wide">Descrição<textarea name="descricao" value={formData.descricao} onChange={handleChange} required rows="3" placeholder="O que a comunidade pode doar?" /></label>
+              <label className="field-wide">Endereço de recebimento<input name="endereco" value={formData.endereco} onChange={handleChange} required placeholder="Rua, número, bairro e cidade" /></label>
+              <label>Início<input type="datetime-local" name="data_inicio" value={formData.data_inicio} onChange={handleChange} required /></label>
+              <label>Encerramento<input type="datetime-local" name="data_fim" value={formData.data_fim} onChange={handleChange} required /></label>
+              <label>Horário de atendimento<input name="horario" value={formData.horario} onChange={handleChange} placeholder="Seg. a sáb., 8h às 18h" /></label>
+              <label>Capacidade / observação<input name="capacidade" value={formData.capacidade} onChange={handleChange} placeholder="Ex.: 200 kg ou 30 caixas" /></label>
+              <label className="field-wide">Categorias aceitas<select multiple value={formData.categorias_ids} onChange={(event) => setFormData((current) => ({ ...current, categorias_ids: Array.from(event.target.selectedOptions, (option) => option.value) }))}>
+                {categorias.map((categoria) => <option key={categoria.id} value={categoria.id}>{categoria.nome}</option>)}
+              </select><small>Use Ctrl/Cmd para selecionar mais de uma categoria.</small></label>
+            </div>
+            <button type="submit" className="button button-primary" disabled={saving}>{saving ? 'Criando...' : 'Publicar evento'}</button>
+          </form>
+        )}
+
+        <div className="section-heading">
+          <span className="eyebrow">Aberto para participação</span>
+          <h2>Encontre uma campanha perto de você</h2>
+        </div>
+        {loading ? <div className="state-card">Carregando eventos...</div> : eventos.length === 0 ? (
+          <div className="state-card">Ainda não há eventos publicados. Seja a primeira entidade a organizar uma campanha.</div>
+        ) : (
+          <div className="events-grid">
+            {eventos.map((evento) => (
+              <article className="event-card" key={evento.id}>
+                <div className="event-card-top"><span>{evento.entidade_tipo}</span><strong>{evento.status}</strong></div>
+                <h3>{evento.titulo}</h3>
+                <p className="event-entity">{evento.entidade_nome}</p>
+                <p>{evento.descricao}</p>
+                <div className="event-details"><span>📍 {evento.endereco}</span><span>🗓️ {formatarData(evento.data_inicio)} até {formatarData(evento.data_fim)}</span>{evento.horario && <span>⏰ {evento.horario}</span>}</div>
+              </article>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -413,6 +591,15 @@ function Dashboard({ user, setCurrentPage, token }) {
         </div>
       </section>
 
+      <section className="dashboard-event-cta">
+        <div>
+          <span className="eyebrow">Organize uma campanha</span>
+          <h2>Transforme seu espaço em um ponto de solidariedade</h2>
+          <p>Academias, ONGs, mercados e associações podem abrir eventos e receber doações da comunidade.</p>
+        </div>
+        <button type="button" className="button button-primary" onClick={() => setCurrentPage('eventos')}>Criar evento de doação</button>
+      </section>
+
       <section style={{
         background: 'white',
         padding: '3rem 2rem',
@@ -456,7 +643,11 @@ function MeusItens({ token, setCurrentPage }) {
     descricao: '',
     categoria_id: '',
     quantidade: 1,
-    unidade: 'unidade'
+    unidade: 'unidade',
+    estado_conservacao: 'usado',
+    valor_contribuicao: '',
+    data_disponibilidade: '',
+    tipo_entrega: 'retirada'
   });
   const [categorias, setCategorias] = useState([]);
   const [instituicoes, setInstituicoes] = useState([]);
@@ -534,6 +725,10 @@ function MeusItens({ token, setCurrentPage }) {
         descricao: String(formData.descricao),
         quantidade: Number(formData.quantidade) || 1,
         unidade: String(formData.unidade) || 'unidade',
+        estado_conservacao: formData.estado_conservacao,
+        valor_contribuicao: formData.valor_contribuicao ? Number(formData.valor_contribuicao) : null,
+        data_disponibilidade: formData.data_disponibilidade || null,
+        tipo_entrega: formData.tipo_entrega,
         pode_retirar_diretamente: destinoTipo !== 'instituicao',
       };
 
@@ -550,7 +745,11 @@ function MeusItens({ token, setCurrentPage }) {
         descricao: '',
         categoria_id: '',
         quantidade: 1,
-        unidade: 'unidade'
+        unidade: 'unidade',
+        estado_conservacao: 'usado',
+        valor_contribuicao: '',
+        data_disponibilidade: '',
+        tipo_entrega: 'retirada'
       });
       setDestinoTipo('direto');
       setInstituicaoSelecionada('');
@@ -832,6 +1031,33 @@ function MeusItens({ token, setCurrentPage }) {
                     <option value="litro">Litro (L)</option>
                     <option value="metro">Metro (m)</option>
                     <option value="caixa">Caixa</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="advanced-form-row">
+                <div>
+                  <label>Estado de conservação</label>
+                  <select name="estado_conservacao" value={formData.estado_conservacao} onChange={handleChange}>
+                    <option value="novo">Novo</option>
+                    <option value="seminovo">Seminovo</option>
+                    <option value="usado">Usado</option>
+                  </select>
+                </div>
+                <div>
+                  <label>Contribuição voluntária (R$)</label>
+                  <input type="number" name="valor_contribuicao" value={formData.valor_contribuicao} onChange={handleChange} min="0" step="0.01" placeholder="Deixe vazio para gratuita" />
+                </div>
+                <div>
+                  <label>Disponível para retirada em</label>
+                  <input type="date" name="data_disponibilidade" value={formData.data_disponibilidade} onChange={handleChange} />
+                </div>
+                <div>
+                  <label>Tipo de entrega</label>
+                  <select name="tipo_entrega" value={formData.tipo_entrega} onChange={handleChange}>
+                    <option value="retirada">Retirada presencial</option>
+                    <option value="entrega_gratis">Entrega grátis</option>
+                    <option value="taxa_combinada">Taxa combinada</option>
                   </select>
                 </div>
               </div>
@@ -1453,6 +1679,15 @@ function Explorar({ setCurrentPage, token }) {
   const [itens, setItens] = useState([]);
   const [loading, setLoading] = useState(true);
   const [categoria, setCategoria] = useState('');
+  const [termo, setTermo] = useState('');
+  const [status, setStatus] = useState('disponivel');
+  const [conservacao, setConservacao] = useState('');
+  const [faixaValor, setFaixaValor] = useState('');
+  const [distancia, setDistancia] = useState('');
+  const [dataAte, setDataAte] = useState('');
+  const [tipoEntrega, setTipoEntrega] = useState('');
+  const [pontoColeta, setPontoColeta] = useState('');
+  const [localizacao, setLocalizacao] = useState(null);
   const [categorias, setCategorias] = useState([]);
 
   useEffect(() => {
@@ -1461,7 +1696,15 @@ function Explorar({ setCurrentPage, token }) {
 
   useEffect(() => {
     carregarItens();
-  }, [categoria]);
+  }, [categoria, termo, status, conservacao, faixaValor, distancia, dataAte, tipoEntrega, pontoColeta, localizacao]);
+
+  useEffect(() => {
+    if (!distancia || localizacao || !navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(
+      ({ coords }) => setLocalizacao({ latitude: coords.latitude, longitude: coords.longitude }),
+      () => console.warn('Localização não autorizada; filtro de distância não aplicado.')
+    );
+  }, [distancia, localizacao]);
 
   const carregarCategorias = async () => {
     try {
@@ -1475,7 +1718,21 @@ function Explorar({ setCurrentPage, token }) {
   const carregarItens = async () => {
     setLoading(true);
     try {
-      const url = categoria ? `/itens-doacao/?categoria=${categoria}` : '/itens-doacao/';
+      const params = new URLSearchParams();
+      if (categoria) params.set('categoria', categoria);
+      if (status) params.set('status', status);
+      if (termo.trim()) params.set('search', termo.trim());
+      if (conservacao) params.set('estado_conservacao', conservacao);
+      if (faixaValor) params.set('valor_max', faixaValor);
+      if (dataAte) params.set('data_ate', dataAte);
+      if (tipoEntrega) params.set('tipo_entrega', tipoEntrega);
+      if (pontoColeta) params.set('ponto_coleta', pontoColeta);
+      if (distancia && localizacao) {
+        params.set('distancia_km', distancia);
+        params.set('lat', localizacao.latitude);
+        params.set('lon', localizacao.longitude);
+      }
+      const url = `/itens-doacao/?${params.toString()}`;
       const response = await apiClient.get(url);
       setItens(response.data.results || response.data);
     } catch (err) {
@@ -1486,12 +1743,27 @@ function Explorar({ setCurrentPage, token }) {
   };
 
   return (
-    <div style={{ padding: '2rem', maxWidth: '1200px', margin: '0 auto' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
-        <h1 style={{ color: '#FF9500', margin: 0 }}>Explorar Doações</h1>
+    <div className="explore-page" style={{ padding: '2rem', maxWidth: '1200px', margin: '0 auto' }}>
+      <div className="page-heading" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
+        <div>
+          <span className="eyebrow">Encontre o que precisa</span>
+          <h1 style={{ color: '#FF9500', margin: 0 }}>Explorar doações</h1>
+          <p className="page-intro">Combine filtros para encontrar uma doação viável para você.</p>
+        </div>
       </div>
 
-      <div style={{ marginBottom: '1.5rem', maxWidth: '320px' }}>
+      <div className="filter-toolbar" style={{ marginBottom: '1.5rem', maxWidth: '100%' }}>
+        <div className="search-field">
+          <label htmlFor="buscar-doacoes">Buscar item</label>
+          <input
+            id="buscar-doacoes"
+            type="search"
+            value={termo}
+            onChange={(e) => setTermo(e.target.value)}
+            placeholder="Ex.: material escolar, cesta básica..."
+          />
+        </div>
+        <div>
         <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '600', color: '#333' }}>Filtrar por categoria</label>
         <select
           value={categoria}
@@ -1503,13 +1775,72 @@ function Explorar({ setCurrentPage, token }) {
             <option key={cat.id} value={cat.id}>{cat.nome}</option>
           ))}
         </select>
+        </div>
+        <div>
+        <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '600', color: '#333' }}>Disponibilidade</label>
+        <select value={status} onChange={(e) => setStatus(e.target.value)} style={{ width: '100%', padding: '0.75rem', border: '1px solid #ddd', borderRadius: '6px' }}>
+          <option value="disponivel">Disponíveis</option>
+          <option value="interessado">Com interessado</option>
+        </select>
+        </div>
+        <div>
+          <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '600', color: '#333' }}>Conservação</label>
+          <select value={conservacao} onChange={(e) => setConservacao(e.target.value)} style={{ width: '100%', padding: '0.75rem', border: '1px solid #ddd', borderRadius: '6px' }}>
+            <option value="">Qualquer estado</option>
+            <option value="novo">Novo</option>
+            <option value="seminovo">Seminovo</option>
+            <option value="usado">Usado</option>
+          </select>
+        </div>
+        <div>
+          <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '600', color: '#333' }}>Contribuição</label>
+          <select value={faixaValor} onChange={(e) => setFaixaValor(e.target.value)} style={{ width: '100%', padding: '0.75rem', border: '1px solid #ddd', borderRadius: '6px' }}>
+            <option value="">Qualquer valor</option>
+            <option value="0">Gratuita</option>
+            <option value="50">Até R$ 50</option>
+            <option value="100">Até R$ 100</option>
+          </select>
+        </div>
+        <div>
+          <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '600', color: '#333' }}>Retirada disponível até</label>
+          <input type="date" value={dataAte} onChange={(e) => setDataAte(e.target.value)} />
+        </div>
+        <div>
+          <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '600', color: '#333' }}>Tipo de entrega</label>
+          <select value={tipoEntrega} onChange={(e) => setTipoEntrega(e.target.value)} style={{ width: '100%', padding: '0.75rem', border: '1px solid #ddd', borderRadius: '6px' }}>
+            <option value="">Qualquer tipo</option>
+            <option value="retirada">Retirada presencial</option>
+            <option value="entrega_gratis">Entrega grátis</option>
+            <option value="taxa_combinada">Taxa combinada</option>
+          </select>
+        </div>
+        <div>
+          <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '600', color: '#333' }}>Ponto de coleta</label>
+          <select value={pontoColeta} onChange={(e) => setPontoColeta(e.target.value)} style={{ width: '100%', padding: '0.75rem', border: '1px solid #ddd', borderRadius: '6px' }}>
+            <option value="">Todos os destinos</option>
+            <option value="sim">Somente pontos comunitários</option>
+          </select>
+        </div>
+        <div>
+          <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '600', color: '#333' }}>Distância</label>
+          <select value={distancia} onChange={(e) => setDistancia(e.target.value)} style={{ width: '100%', padding: '0.75rem', border: '1px solid #ddd', borderRadius: '6px' }}>
+            <option value="">Qualquer distância</option>
+            <option value="1">Até 1 km</option>
+            <option value="5">Até 5 km</option>
+            <option value="10">Até 10 km</option>
+            <option value="50">20 km ou mais</option>
+          </select>
+          {distancia && !localizacao && <small className="filter-hint">Autorize sua localização para aplicar.</small>}
+        </div>
       </div>
 
       {loading ? (
-        <div style={{ textAlign: 'center', padding: '2rem', color: '#666' }}>Carregando itens...</div>
+        <div className="state-card" style={{ textAlign: 'center', padding: '2rem', color: '#666' }}>Carregando itens...</div>
       ) : itens.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '2rem', color: '#666' }}>
-          <p>Nenhum item encontrado</p>
+        <div className="state-card" style={{ textAlign: 'center', padding: '2rem', color: '#666' }}>
+        <span className="empty-icon">⌕</span>
+        <p>Nenhuma doação encontrada</p>
+        <small>Tente uma palavra-chave ou categoria diferente.</small>
         </div>
       ) : (
         <div style={{
@@ -1520,6 +1851,7 @@ function Explorar({ setCurrentPage, token }) {
           {itens.map(item => (
             <div
               key={item.id}
+              className="donation-card"
               style={{
                 background: 'white',
                 borderRadius: '12px',
@@ -2032,7 +2364,7 @@ export default function App() {
     fetchMe();
   }, [token, user]);
   const isItemPage = currentPage.startsWith('item-');
-  const isKnownPage = ['home', 'explorar', 'login', 'registro', 'dashboard', 'meus-itens', 'meus-interesses', 'expressar-interesse', 'perfil'].includes(currentPage) || isItemPage;
+  const isKnownPage = ['home', 'explorar', 'eventos', 'pontos-coleta', 'login', 'registro', 'dashboard', 'meus-itens', 'meus-interesses', 'expressar-interesse', 'perfil'].includes(currentPage) || isItemPage;
   const requiresToken = currentPage === 'dashboard' || currentPage === 'meus-itens' || currentPage === 'perfil' || isItemPage;
   const showHome = !isKnownPage || currentPage === 'home' || (requiresToken && !token);
 
@@ -2047,8 +2379,10 @@ export default function App() {
       <Navbar currentPage={currentPage} setCurrentPage={setCurrentPage} user={user} setUser={setUser} setToken={setToken} />
       <ErrorBoundary>
         <main style={{ flex: 1 }}>
-          {showHome && <Home setCurrentPage={setCurrentPage} />}
+          {showHome && <Home setCurrentPage={setCurrentPage} token={token} />}
           {currentPage === 'explorar' && <Explorar setCurrentPage={setCurrentPage} token={token} />}
+          {currentPage === 'eventos' && <EventosDoacao setCurrentPage={setCurrentPage} token={token} />}
+          {currentPage === 'pontos-coleta' && <PontosColeta setCurrentPage={setCurrentPage} />}
           {currentPage === 'login' && <Login setCurrentPage={setCurrentPage} setUser={setUser} setToken={setToken} />}
           {currentPage === 'registro' && <Registro setCurrentPage={setCurrentPage} setUser={setUser} setToken={setToken} />}
           {currentPage === 'perfil' && token && <Profile setCurrentPage={setCurrentPage} setUser={setUser} setToken={setToken} token={token} />}
