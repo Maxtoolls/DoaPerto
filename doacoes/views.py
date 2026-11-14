@@ -324,16 +324,28 @@ class MensagemViewSet(viewsets.ModelViewSet):
 @api_view(['POST'])
 @permission_classes([permissions.AllowAny])
 def registro(request):
-    username = request.data.get('username')
-    email = request.data.get('email')
-    password = request.data.get('password')
-    first_name = request.data.get('first_name', '')
-    tipo = request.data.get('tipo', 'doador')
+    logger = logging.getLogger(__name__)
+
+    # Safely access parsed data and log any parsing errors/raw body
+    try:
+        data = request.data
+    except Exception as e:
+        raw = getattr(request, 'body', b'')
+        logger.warning('registro parse error: %s; raw_body=%s', str(e), raw[:500])
+        return Response({'detail': 'Corpo da requisição inválido'}, status=status.HTTP_400_BAD_REQUEST)
+
+    username = data.get('username')
+    email = data.get('email')
+    password = data.get('password')
+    first_name = data.get('first_name', '')
+    tipo = data.get('tipo', 'doador')
 
     if not username or not email or not password:
+        logger.warning('registro missing fields: %s', data)
         return Response({'detail': 'username, email e password são obrigatórios'}, status=status.HTTP_400_BAD_REQUEST)
 
     if User.objects.filter(username=username).exists():
+        logger.warning('registro username exists: %s; data=%s', username, data)
         return Response({'detail': 'Usuário já existe'}, status=status.HTTP_400_BAD_REQUEST)
 
     try:
@@ -362,6 +374,7 @@ def registro(request):
             )
 
         refresh = RefreshToken.for_user(user)
+        logger.info('registro success: username=%s id=%s', user.username, user.id)
         return Response({
             'access': str(refresh.access_token),
             'refresh': str(refresh),
@@ -372,6 +385,7 @@ def registro(request):
             }
         }, status=status.HTTP_201_CREATED)
     except Exception as e:
+        logger.exception('registro exception: %s; data=%s', str(e), data)
         return Response({'detail': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 

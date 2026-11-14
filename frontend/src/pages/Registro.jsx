@@ -22,8 +22,8 @@ export default function Registro({ setIsAuthenticated, setUser }) {
     e.preventDefault();
     setLoading(true);
     try {
-      await apiClient.post('/usuarios/', {
-        user: formData,
+      await apiClient.post('/auth/registro/', {
+        ...formData,
         tipo: 'doador',
         aceite_termos: true,
       });
