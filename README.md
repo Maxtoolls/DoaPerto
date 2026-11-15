@@ -367,3 +367,12 @@ Qualquer dúvida, abra uma issue no repositório.
 https://github.com/user-attachments/assets/a9974cc6-a92f-467b-bdc3-56f2a4799f6f
 
 
+## Resultado das melhorias implementadas para a 2ª entrega do projeto
+
+
+
+https://github.com/user-attachments/assets/5c25e48e-4ed0-49db-bb45-114820653f69
+
+
+
+
