@@ -68,7 +68,7 @@ Perfil de Receptor
 |-------|------|-----------|
 | id | INT | PK |
 | usuario_id | INT | FK para doacoes_usuario (unique) |
-| tipo | VARCHAR(50) | 'pessoa', 'ong', 'igreja', 'escola', 'reciclagem' |
+| tipo | VARCHAR(50) | 'pessoa', 'ong', 'igreja', 'escola', 'reciclagem', 'academia', 'supermercado' ou 'associacao' |
 | cnpj | VARCHAR(18) | CNPJ se for jurídica |
 | responsavel | VARCHAR(150) | Nome do responsável |
 | telefone_contato | VARCHAR(20) | Contato principal |
@@ -81,6 +81,18 @@ Perfil de Receptor
 **Índices:** tipo, ativo
 
 **Relacionamento:** `doacoes_receptor_tipos_item_aceitos` (ManyToMany)
+
+Contas institucionais são criadas pelo endpoint de registro com
+`tipo='entidade'` e um `entidade_tipo`. O endereço e as coordenadas públicas
+ficam em `doacoes_usuario`; itens publicados por doadores aparecem para a
+entidade quando `doacoes_itemdoacao.receptor_confirmado_id` aponta para seu
+registro.
+
+Endpoints públicos:
+
+- `GET /api/receptores/entidades/` lista entidades ativas com endereço e itens disponíveis.
+- `GET /api/receptores/entidades/?lat=<lat>&lon=<lon>&km=<raio>` filtra por proximidade.
+- `GET /api/receptores/<id>/itens-disponiveis/` lista itens destinados à entidade.
 
 ---
 

@@ -56,6 +56,8 @@ CREATE TABLE IF NOT EXISTS doacoes_doador_categorias_doacao (
 );
 
 -- TABELA: Receptores
+-- tipo institucional: ong, igreja, escola, reciclagem, academia,
+-- supermercado ou associacao (pessoa representa receptor individual)
 CREATE TABLE IF NOT EXISTS doacoes_receptor (
     id INTEGER PRIMARY KEY AUTO_INCREMENT,
     usuario_id INTEGER NOT NULL UNIQUE,

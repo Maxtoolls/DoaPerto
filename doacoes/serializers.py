@@ -21,15 +21,23 @@ class UserSerializer(serializers.ModelSerializer):
 
 class UsuarioSerializer(serializers.ModelSerializer):
     user = UserSerializer(read_only=True)
+    pode_configurar_localizacao = serializers.SerializerMethodField()
 
     class Meta:
         model = Usuario
         fields = [
             'id', 'user', 'tipo', 'telefone', 'endereco',
             'latitude', 'longitude', 'aceite_termos',
-            'data_consentimento', 'referido_por'
+            'data_consentimento', 'referido_por', 'pode_configurar_localizacao'
         ]
-        read_only_fields = ['id', 'data_criacao', 'data_atualizacao']
+        read_only_fields = [
+            'id', 'data_criacao', 'data_atualizacao',
+            'pode_configurar_localizacao',
+        ]
+
+    def get_pode_configurar_localizacao(self, obj):
+        receptor = getattr(obj, 'receptor', None)
+        return obj.tipo == 'receptor' and receptor is not None and receptor.tipo != 'pessoa'
 
 
 class DoadorSerializer(serializers.ModelSerializer):
@@ -78,6 +86,32 @@ class ReceptorSerializer(serializers.ModelSerializer):
         extra_kwargs = {
             'cnpj': {'write_only': True}
         }
+
+
+class EntidadeSerializer(serializers.ModelSerializer):
+    usuario = UsuarioSerializer(read_only=True)
+    categorias_aceitas = CategoriaItemSerializer(
+        source='tipos_item_aceitos', many=True, read_only=True
+    )
+    itens_disponiveis = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Receptor
+        fields = [
+            'id', 'usuario', 'tipo', 'responsavel', 'telefone_contato',
+            'publico_atendido', 'categorias_aceitas',
+            'disponibilidade_retirada', 'horarios_disponibilidade',
+            'sobre', 'itens_disponiveis',
+        ]
+
+    def get_itens_disponiveis(self, entidade):
+        itens = ItemDoacao.objects.filter(
+            receptor_confirmado=entidade,
+            status__in=['disponivel', 'interessado'],
+        ).order_by('-data_criacao')
+        return ItemDoacaoSerializer(
+            itens, many=True, context=self.context
+        ).data
 
 
 class PontoColetaSerializer(serializers.ModelSerializer):
@@ -134,11 +168,22 @@ class InteresseSerializer(serializers.ModelSerializer):
         source='receptor.usuario.user.get_full_name',
         read_only=True
     )
+    item_doador_nome = serializers.CharField(
+        source='item.doador.usuario.user.get_full_name',
+        read_only=True
+    )
+    receptor_usuario_id = serializers.IntegerField(
+        source='receptor.usuario_id', read_only=True
+    )
+    item_doador_usuario_id = serializers.IntegerField(
+        source='item.doador.usuario_id', read_only=True
+    )
 
     class Meta:
         model = Interesse
         fields = [
-            'id', 'item', 'item_titulo', 'receptor', 'receptor_nome',
+            'id', 'item', 'item_titulo', 'item_doador_nome', 'receptor', 'receptor_nome',
+            'receptor_usuario_id', 'item_doador_usuario_id',
             'status', 'mensagem_inicial', 'data_criacao', 'data_atualizacao'
         ]
         read_only_fields = ['id', 'data_criacao', 'data_atualizacao']
@@ -196,6 +241,13 @@ class MensagemSerializer(serializers.ModelSerializer):
             'data_criacao'
         ]
         read_only_fields = ['id', 'data_criacao']
+
+
+class MatchSerializer(serializers.Serializer):
+    item = ItemDoacaoSerializer(read_only=True)
+    score = serializers.IntegerField()
+    motivos = serializers.ListField(child=serializers.CharField())
+    distancia_km = serializers.FloatField(allow_null=True)
 
 
 class DoacaoSerializer(serializers.ModelSerializer):

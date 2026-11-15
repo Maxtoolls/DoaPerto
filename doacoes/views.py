@@ -1,5 +1,6 @@
 from rest_framework import viewsets, permissions, status, filters, generics
 from rest_framework.decorators import action, api_view, permission_classes
+from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 from django_filters.rest_framework import DjangoFilterBackend
@@ -15,6 +16,7 @@ from .serializers import (
     DoacaoSerializer, CategoriaItemSerializer, UsuarioSerializer, DoadorSerializer,
     ReceptorSerializer, PontoColetaSerializer, ItemDoacaoSerializer,
     InteresseSerializer, MensagemSerializer, EventoDoacaoSerializer
+    , MatchSerializer, EntidadeSerializer
 )
 import logging
 from datetime import date
@@ -29,6 +31,15 @@ def haversine_distance(lat1, lon1, lat2, lon2):
     a = sin(dlat/2)**2 + cos(lat1) * cos(lat2) * sin(dlon/2)**2
     c = 2 * atan2(sqrt(a), sqrt(1-a))
     return R * c
+
+
+def usuario_pode_configurar_localizacao(usuario):
+    receptor = getattr(usuario, 'receptor', None)
+    return (
+        usuario.tipo == 'receptor'
+        and receptor is not None
+        and receptor.tipo != 'pessoa'
+    )
 
 
 class CategoriaItemViewSet(viewsets.ModelViewSet):
@@ -60,6 +71,11 @@ class UsuarioViewSet(viewsets.ModelViewSet):
 
         if request.method in ['PUT', 'PATCH']:
             data = request.data
+            if ('latitude' in data or 'longitude' in data) and not usuario_pode_configurar_localizacao(usuario):
+                return Response(
+                    {'detail': 'A geolocalização do perfil está disponível apenas para instituições e entidades.'},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
             # update related Django User fields if provided
             user = request.user
             user_changed = False
@@ -134,6 +150,79 @@ class ReceptorViewSet(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend, filters.SearchFilter]
     filterset_fields = ['tipo', 'disponibilidade_retirada']
     search_fields = ['usuario__user__username', 'responsavel', 'sobre']
+
+    @action(detail=False, methods=['get', 'put', 'patch'], permission_classes=[permissions.IsAuthenticated])
+    def me(self, request):
+        receptor = Receptor.objects.filter(usuario__user=request.user).first()
+        if not receptor:
+            return Response(
+                {'detail': 'Cadastro de receptor não encontrado.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        if request.method == 'GET':
+            return Response(self.get_serializer(receptor).data)
+        serializer = self.get_serializer(
+            receptor,
+            data=request.data,
+            partial=request.method == 'PATCH',
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
+
+    @action(detail=False, methods=['get'])
+    def entidades(self, request):
+        entidades = self.get_queryset().exclude(tipo='pessoa')
+        lat = request.query_params.get('lat')
+        lon = request.query_params.get('lon')
+        km = request.query_params.get('km')
+
+        if not (lat and lon and km):
+            return Response(EntidadeSerializer(entidades, many=True, context={'request': request}).data)
+
+        try:
+            origem = (float(lat), float(lon))
+            limite = float(km)
+        except (TypeError, ValueError):
+            return Response(
+                {'error': 'lat, lon e km devem ser numéricos.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        proximas = []
+        for entidade in entidades:
+            if entidade.usuario.latitude is None or entidade.usuario.longitude is None:
+                continue
+            distancia = haversine_distance(
+                origem[0], origem[1],
+                float(entidade.usuario.latitude),
+                float(entidade.usuario.longitude),
+            )
+            if distancia <= limite:
+                proximas.append({
+                    'entidade': EntidadeSerializer(
+                        entidade, context={'request': request}
+                    ).data,
+                    'distancia_km': round(distancia, 2),
+                })
+        proximas.sort(key=lambda item: item['distancia_km'])
+        return Response(proximas)
+
+    @action(detail=True, methods=['get'], url_path='itens-disponiveis')
+    def itens_disponiveis(self, request, pk=None):
+        entidade = self.get_object()
+        if entidade.tipo == 'pessoa':
+            return Response(
+                {'detail': 'Este perfil não é uma entidade.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        itens = ItemDoacao.objects.filter(
+            receptor_confirmado=entidade,
+            status__in=['disponivel', 'interessado'],
+        ).order_by('-data_criacao')
+        return Response(ItemDoacaoSerializer(
+            itens, many=True, context={'request': request}
+        ).data)
 
     @action(detail=False, methods=['get'])
     def proximos(self, request):
@@ -212,6 +301,7 @@ class ItemDoacaoViewSet(viewsets.ModelViewSet):
     ]
     search_fields = ['titulo', 'descricao']
     ordering_fields = ['data_criacao', 'quantidade']
+    parser_classes = [MultiPartParser, FormParser]
 
     def get_queryset(self):
         queryset = super().get_queryset()
@@ -329,11 +419,17 @@ class EventoDoacaoViewSet(viewsets.ModelViewSet):
 
 
 class InteresseViewSet(viewsets.ModelViewSet):
-    queryset = Interesse.objects.all()
     serializer_class = InteresseSerializer
     permission_classes = [permissions.IsAuthenticated]
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ['status', 'item']
+
+    def get_queryset(self):
+        usuario = self.request.user
+        return Interesse.objects.filter(
+            Q(receptor__usuario__user=usuario)
+            | Q(item__doador__usuario__user=usuario)
+        ).distinct()
 
     @action(detail=True, methods=['post'])
     def confirmar(self, request, pk=None):
@@ -353,12 +449,17 @@ class InteresseViewSet(viewsets.ModelViewSet):
 
 
 class MensagemViewSet(viewsets.ModelViewSet):
-    queryset = Mensagem.objects.all()
     serializer_class = MensagemSerializer
     permission_classes = [permissions.IsAuthenticated]
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
     filterset_fields = ['lida']
     ordering_fields = ['data_criacao']
+
+    def get_queryset(self):
+        usuario = self.request.user.perfil_doaperto
+        return Mensagem.objects.filter(
+            Q(remetente=usuario) | Q(destinatario=usuario)
+        )
 
     def perform_create(self, serializer):
         serializer.save(remetente=self.request.user.perfil_doaperto)
@@ -370,7 +471,9 @@ class MensagemViewSet(viewsets.ModelViewSet):
             return Response({'error': 'usuario_id é obrigatório'}, status=status.HTTP_400_BAD_REQUEST)
 
         usuario_atual = request.user.perfil_doaperto
-        outro_usuario = Usuario.objects.get(id=outro_usuario_id)
+        outro_usuario = Usuario.objects.filter(id=outro_usuario_id).first()
+        if not outro_usuario:
+            return Response({'error': 'Usuário destinatário não encontrado'}, status=status.HTTP_404_NOT_FOUND)
 
         mensagens = Mensagem.objects.filter(
             Q(remetente=usuario_atual, destinatario=outro_usuario) |
@@ -385,6 +488,68 @@ class MensagemViewSet(viewsets.ModelViewSet):
         usuario = request.user.perfil_doaperto
         mensagens = Mensagem.objects.filter(destinatario=usuario, lida=False)
         serializer = self.get_serializer(mensagens, many=True)
+        return Response(serializer.data)
+
+
+class MatchingViewSet(viewsets.ViewSet):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def list(self, request):
+        receptor = Receptor.objects.filter(usuario__user=request.user).first()
+        if not receptor:
+            return Response(
+                {'detail': 'Apenas receptores possuem recomendações de doação.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        try:
+            limite = min(max(int(request.query_params.get('limite', 20)), 1), 50)
+        except (TypeError, ValueError):
+            limite = 20
+        categorias = set(receptor.tipos_item_aceitos.values_list('id', flat=True))
+        origem = (receptor.usuario.latitude, receptor.usuario.longitude)
+        resultados = []
+
+        itens = ItemDoacao.objects.filter(
+            status__in=['disponivel', 'interessado']
+        ).select_related('categoria', 'doador__usuario', 'ponto_coleta')
+        for item in itens:
+            score = 0
+            motivos = []
+            if item.categoria_id in categorias:
+                score += 50
+                motivos.append('categoria aceita pelo receptor')
+            if item.tipo_entrega == 'retirada' and receptor.disponibilidade_retirada:
+                score += 15
+                motivos.append('retirada compatível')
+            if item.valor_contribuicao in (None, 0):
+                score += 10
+                motivos.append('doação gratuita')
+
+            distancia = None
+            destino = (item.doador.usuario.latitude, item.doador.usuario.longitude)
+            if all(value is not None for value in (*origem, *destino)):
+                distancia = round(haversine_distance(
+                    float(origem[0]), float(origem[1]),
+                    float(destino[0]), float(destino[1]),
+                ), 2)
+                if distancia <= 5:
+                    score += 25
+                    motivos.append('doador próximo')
+                elif distancia <= 20:
+                    score += 10
+                    motivos.append('doador na mesma região')
+
+            if score:
+                resultados.append({
+                    'item': item,
+                    'score': score,
+                    'motivos': motivos,
+                    'distancia_km': distancia,
+                })
+
+        resultados.sort(key=lambda result: (-result['score'], result['item'].data_criacao))
+        serializer = MatchSerializer(resultados[:limite], many=True)
         return Response(serializer.data)
 
 
@@ -405,7 +570,13 @@ def registro(request):
     email = data.get('email')
     password = data.get('password')
     first_name = data.get('first_name', '')
-    tipo = data.get('tipo', 'doador')
+    tipo_conta = data.get('tipo', 'doador')
+    entidade_tipo = data.get('entidade_tipo', 'ong')
+    tipos_entidade = {
+        'ong', 'igreja', 'escola', 'reciclagem',
+        'academia', 'supermercado', 'associacao',
+    }
+    tipo = 'receptor' if tipo_conta in ['receptor', 'entidade'] else 'doador'
 
     if not username or not email or not password:
         logger.warning('registro missing fields: %s', data)
@@ -425,8 +596,11 @@ def registro(request):
 
         usuario = Usuario.objects.create(
             user=user,
-            tipo=tipo if tipo in ['doador', 'receptor'] else 'doador',
-            aceite_termos=True
+            tipo=tipo,
+            endereco=data.get('endereco', '') if tipo == 'receptor' else '',
+            latitude=data.get('latitude') if tipo == 'receptor' else None,
+            longitude=data.get('longitude') if tipo == 'receptor' else None,
+            aceite_termos=True,
         )
 
         if usuario.tipo == 'doador':
@@ -437,7 +611,12 @@ def registro(request):
         else:
             Receptor.objects.get_or_create(
                 usuario=usuario,
-                defaults={'tipo': 'pessoa'}
+                defaults={
+                    'tipo': entidade_tipo if tipo_conta == 'entidade' and entidade_tipo in tipos_entidade else 'pessoa',
+                    # Receptor.cnpj is unique; keep the optional field collision-free
+                    # until the institution completes its profile.
+                    'cnpj': f'PENDENTE{user.id}',
+                }
             )
 
         refresh = RefreshToken.for_user(user)
@@ -448,7 +627,12 @@ def registro(request):
             'user': {
                 'username': user.username,
                 'email': user.email,
-                'tipo': usuario.tipo
+                'tipo': usuario.tipo,
+                'entidade_tipo': (
+                    usuario.receptor.tipo
+                    if usuario.tipo == 'receptor' and usuario.receptor.tipo != 'pessoa'
+                    else None
+                ),
             }
         }, status=status.HTTP_201_CREATED)
     except Exception as e:

@@ -5,6 +5,7 @@ from .views import (
     DoacaoViewSet, CategoriaItemViewSet, UsuarioViewSet, DoadorViewSet,
     ReceptorViewSet, PontoColetaViewSet, ItemDoacaoViewSet,
     InteresseViewSet, MensagemViewSet, EventoDoacaoViewSet, registro
+    , MatchingViewSet
 )
 
 router = DefaultRouter()
@@ -16,8 +17,9 @@ router.register(r'receptores', ReceptorViewSet)
 router.register(r'pontos-coleta', PontoColetaViewSet)
 router.register(r'itens-doacao', ItemDoacaoViewSet)
 router.register(r'eventos-doacao', EventoDoacaoViewSet)
-router.register(r'interesses', InteresseViewSet)
-router.register(r'mensagens', MensagemViewSet)
+router.register(r'interesses', InteresseViewSet, basename='interesses')
+router.register(r'mensagens', MensagemViewSet, basename='mensagens')
+router.register(r'matches', MatchingViewSet, basename='matches')
 
 urlpatterns = [
     path('', include(router.urls)),

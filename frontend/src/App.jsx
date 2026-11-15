@@ -33,6 +33,14 @@ function Navbar({ currentPage, setCurrentPage, user, setUser, setToken }) {
         >
           Eventos
         </button>
+        {user && (
+          <button
+            onClick={() => setCurrentPage('chat')}
+            className={`nav-link ${currentPage === 'chat' ? 'active' : ''}`}
+          >
+            Chat
+          </button>
+        )}
         {user ? (
           <>
             <button
@@ -299,34 +307,89 @@ function Home({ setCurrentPage, token }) {
 
 function PontosColeta({ setCurrentPage }) {
   const [pontos, setPontos] = useState([]);
+  const [entidades, setEntidades] = useState([]);
+  const [localizacao, setLocalizacao] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  const carregarLocais = async (coordenadas = localizacao) => {
+    setLoading(true);
+    try {
+      const entidadesUrl = coordenadas
+        ? `/receptores/entidades/?lat=${coordenadas.latitude}&lon=${coordenadas.longitude}&km=20`
+        : '/receptores/entidades/';
+      const [pontosResponse, entidadesResponse] = await Promise.all([
+        apiClient.get('/pontos-coleta/'),
+        apiClient.get(entidadesUrl),
+      ]);
+      setPontos(pontosResponse.data.results || pontosResponse.data);
+      const entidadeData = entidadesResponse.data.results || entidadesResponse.data;
+      setEntidades(coordenadas ? entidadeData.map((item) => ({
+        ...item.entidade,
+        distancia_km: item.distancia_km,
+      })) : entidadeData);
+    } catch (err) {
+      console.error('Erro ao carregar locais de doação:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const carregar = async () => {
-      try {
-        const resposta = await apiClient.get('/pontos-coleta/');
-        setPontos(resposta.data.results || resposta.data);
-      } catch (err) {
-        console.error('Erro ao carregar pontos de coleta:', err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    carregar();
+    carregarLocais();
   }, []);
+
+  const localizarEntidades = () => {
+    if (!navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(
+      ({ coords }) => {
+        const coordenadas = { latitude: coords.latitude, longitude: coords.longitude };
+        setLocalizacao(coordenadas);
+        carregarLocais(coordenadas);
+      },
+      () => window.alert('Autorize a localização para encontrar entidades próximas.')
+    );
+  };
 
   return (
     <div className="events-page">
       <section className="events-hero">
-        <div><span className="eyebrow">Doe presencialmente</span><h1>Pontos de coleta</h1><p>Encontre entidades que recebem doações da comunidade.</p></div>
-        <button type="button" className="button button-light" onClick={() => setCurrentPage('home')}>Voltar</button>
+        <div><span className="eyebrow">Rede comunitária</span><h1>Onde doar e receber</h1><p>Encontre pontos de coleta e entidades com endereço, localização e itens disponíveis.</p></div>
+        <div className="events-actions">
+          <button type="button" className="button button-light" onClick={() => setCurrentPage('home')}>Voltar</button>
+          <button type="button" className="button button-accent" onClick={localizarEntidades}>Encontrar perto de mim</button>
+        </div>
       </section>
       <div className="events-content">
-        <div className="section-heading"><span className="eyebrow">Rede comunitária</span><h2>Locais disponíveis</h2></div>
-        {loading ? <div className="state-card">Carregando pontos...</div> : pontos.length === 0 ? <div className="state-card">Nenhum ponto de coleta cadastrado no momento.</div> : (
-          <div className="events-grid">
-            {pontos.map((ponto) => <article className="event-card" key={ponto.id}><div className="event-card-top"><span>{ponto.tipo}</span><strong>Ativo</strong></div><h3>{ponto.nome}</h3><p>{ponto.endereco}</p>{ponto.horarios && <div className="event-details"><span>⏰ {ponto.horarios}</span></div>}{ponto.telefone && <div className="event-details"><span>☎️ {ponto.telefone}</span></div>}</article>)}
-          </div>
+        {loading ? <div className="state-card">Carregando locais...</div> : (
+          <>
+            <div className="section-heading"><span className="eyebrow">Entidades cadastradas</span><h2>Entidades que recebem doações</h2></div>
+            {entidades.length === 0 ? <div className="state-card">Nenhuma entidade com endereço cadastrada no momento.</div> : (
+              <div className="events-grid">
+                {entidades.map((entidade) => (
+                  <article className="event-card" key={`entidade-${entidade.id}`}>
+                    <div className="event-card-top"><span>{entidade.tipo}</span><strong>{entidade.distancia_km == null ? 'Localização pública' : `${entidade.distancia_km} km`}</strong></div>
+                    <h3>{entidade.usuario?.user?.first_name || entidade.usuario?.user?.username || 'Entidade'}</h3>
+                    <p><strong>Endereço:</strong> {entidade.usuario?.endereco || 'Endereço não informado'}</p>
+                    {entidade.responsavel && <p>Responsável: {entidade.responsavel}</p>}
+                    {entidade.horarios_disponibilidade && <div className="event-details"><span>⏰ {entidade.horarios_disponibilidade}</span></div>}
+                    <h4 style={{ margin: '1rem 0 .5rem' }}>Itens disponíveis</h4>
+                    {entidade.itens_disponiveis?.length ? (
+                      <ul style={{ margin: 0, paddingLeft: '1.2rem' }}>
+                        {entidade.itens_disponiveis.map((item) => <li key={item.id}>{item.titulo} — {item.quantidade} {item.unidade}</li>)}
+                      </ul>
+                    ) : <small>Nenhum item destinado à entidade no momento.</small>}
+                  </article>
+                ))}
+              </div>
+            )}
+
+            <div className="section-heading" style={{ marginTop: '3rem' }}><span className="eyebrow">Doe presencialmente</span><h2>Pontos de coleta</h2></div>
+            {pontos.length === 0 ? <div className="state-card">Nenhum ponto de coleta cadastrado no momento.</div> : (
+              <div className="events-grid">
+                {pontos.map((ponto) => <article className="event-card" key={`ponto-${ponto.id}`}><div className="event-card-top"><span>{ponto.tipo}</span><strong>Ativo</strong></div><h3>{ponto.nome}</h3><p>{ponto.endereco}</p>{ponto.horarios && <div className="event-details"><span>⏰ {ponto.horarios}</span></div>}{ponto.telefone && <div className="event-details"><span>☎️ {ponto.telefone}</span></div>}</article>)}
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>
@@ -587,6 +650,18 @@ function Dashboard({ user, setCurrentPage, token }) {
             }}>
               Meus Interesses
             </button>
+            <button onClick={() => setCurrentPage('matches')} style={{
+              marginTop: '0.75rem',
+              background: 'transparent',
+              color: '#FF9500',
+              border: '1px solid #FF9500',
+              padding: '0.65rem 1.2rem',
+              borderRadius: '6px',
+              fontWeight: 'bold',
+              cursor: 'pointer'
+            }}>
+              Sugestões para mim
+            </button>
           </div>
         </div>
       </section>
@@ -647,7 +722,8 @@ function MeusItens({ token, setCurrentPage }) {
     estado_conservacao: 'usado',
     valor_contribuicao: '',
     data_disponibilidade: '',
-    tipo_entrega: 'retirada'
+    tipo_entrega: 'retirada',
+    imagem: null
   });
   const [categorias, setCategorias] = useState([]);
   const [instituicoes, setInstituicoes] = useState([]);
@@ -720,20 +796,21 @@ function MeusItens({ token, setCurrentPage }) {
     }
 
     try {
-      const payload = {
-        titulo: String(formData.titulo),
-        descricao: String(formData.descricao),
-        quantidade: Number(formData.quantidade) || 1,
-        unidade: String(formData.unidade) || 'unidade',
-        estado_conservacao: formData.estado_conservacao,
-        valor_contribuicao: formData.valor_contribuicao ? Number(formData.valor_contribuicao) : null,
-        data_disponibilidade: formData.data_disponibilidade || null,
-        tipo_entrega: formData.tipo_entrega,
-        pode_retirar_diretamente: destinoTipo !== 'instituicao',
-      };
-
-      if (formData.categoria_id) payload.categoria = Number(formData.categoria_id);
-      if (destinoTipo === 'instituicao' && instituicaoSelecionada) payload.receptor_confirmado = Number(instituicaoSelecionada);
+      const payload = new FormData();
+      payload.append('titulo', String(formData.titulo));
+      payload.append('descricao', String(formData.descricao));
+      payload.append('quantidade', String(Number(formData.quantidade) || 1));
+      payload.append('unidade', String(formData.unidade) || 'unidade');
+      payload.append('estado_conservacao', formData.estado_conservacao);
+      payload.append('valor_contribuicao', formData.valor_contribuicao || '');
+      payload.append('data_disponibilidade', formData.data_disponibilidade || '');
+      payload.append('tipo_entrega', formData.tipo_entrega);
+      payload.append('pode_retirar_diretamente', String(destinoTipo !== 'instituicao'));
+      if (formData.categoria_id) payload.append('categoria', String(Number(formData.categoria_id)));
+      if (destinoTipo === 'instituicao' && instituicaoSelecionada) {
+        payload.append('receptor_confirmado', String(Number(instituicaoSelecionada)));
+      }
+      if (formData.imagem) payload.append('imagem', formData.imagem);
       // only include ponto_coleta if selected (not used currently)
 
       console.debug('Publicando item - payload:', payload);
@@ -749,7 +826,8 @@ function MeusItens({ token, setCurrentPage }) {
         estado_conservacao: 'usado',
         valor_contribuicao: '',
         data_disponibilidade: '',
-        tipo_entrega: 'retirada'
+        tipo_entrega: 'retirada',
+        imagem: null
       });
       setDestinoTipo('direto');
       setInstituicaoSelecionada('');
@@ -905,6 +983,18 @@ function MeusItens({ token, setCurrentPage }) {
                     ))}
                   </select>
                 </div>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '600', color: '#333' }}>Imagem da doação</label>
+                <input
+                  type="file"
+                  name="imagem"
+                  accept="image/*"
+                  onChange={(e) => setFormData({ ...formData, imagem: e.target.files?.[0] || null })}
+                  style={{ width: '100%', padding: '0.6rem', border: '1px solid #ddd', borderRadius: '6px', boxSizing: 'border-box' }}
+                />
+                <small style={{ color: '#666' }}>Opcional. Envie uma imagem para ajudar na identificação do item.</small>
               </div>
 
               <div>
@@ -1141,6 +1231,13 @@ function MeusItens({ token, setCurrentPage }) {
                 </div>
 
                 <div style={{ padding: '1.5rem', flex: 1, display: 'flex', flexDirection: 'column' }}>
+                  {item.imagem && (
+                    <img
+                      src={item.imagem}
+                      alt={`Imagem de ${item.titulo}`}
+                      style={{ width: '100%', height: '180px', objectFit: 'cover', borderRadius: '8px', marginBottom: '1rem' }}
+                    />
+                  )}
                   <div style={{ marginBottom: '0.5rem' }}>
                     <span style={{ background: '#FFF3E0', color: '#FF9500', padding: '0.3rem 0.8rem', borderRadius: '20px', fontSize: '0.8rem', fontWeight: 'bold' }}>
                       {item.categoria_nome || item.categoria}
@@ -1437,6 +1534,160 @@ function MeusInteresses({ setCurrentPage }) {
               </div>
             ))}
           </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function Matches({ setCurrentPage }) {
+  const [matches, setMatches] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [feedback, setFeedback] = useState('');
+
+  useEffect(() => {
+    apiClient.get('/matches/')
+      .then((response) => setMatches(response.data.results || response.data))
+      .catch((error) => setFeedback(error.response?.data?.detail || 'Não foi possível carregar as recomendações.'))
+      .finally(() => setLoading(false));
+  }, []);
+
+  return (
+    <div style={{ backgroundColor: '#f5f5f5', minHeight: '100vh' }}>
+      <section className="events-hero">
+        <div><span className="eyebrow">Recomendações inteligentes</span><h1>Doações para você</h1><p>Itens ordenados por categoria, distância e compatibilidade de entrega.</p></div>
+        <button type="button" className="button button-light" onClick={() => setCurrentPage('dashboard')}>Voltar</button>
+      </section>
+      <div className="events-content">
+        {feedback && <div className="event-feedback">{feedback}</div>}
+        {loading ? <div className="state-card">Calculando recomendações...</div> : matches.length === 0 ? (
+          <div className="state-card">Ainda não encontramos itens compatíveis. Complete suas categorias aceitas e localização institucional.</div>
+        ) : (
+          <div className="events-grid">
+            {matches.map((match) => (
+              <article className="event-card" key={match.item.id}>
+                {match.item.imagem && <img src={match.item.imagem} alt={`Imagem de ${match.item.titulo}`} style={{ width: '100%', height: '180px', objectFit: 'cover', borderRadius: '8px' }} />}
+                <div className="event-card-top"><span>Compatibilidade: {match.score}%</span><strong>{match.distancia_km == null ? 'Distância não informada' : `${match.distancia_km} km`}</strong></div>
+                <h3>{match.item.titulo}</h3>
+                <p>{match.item.descricao}</p>
+                <small>{match.motivos.join(' • ')}</small>
+                <button type="button" className="button button-primary" style={{ marginTop: '1rem' }} onClick={() => setCurrentPage('expressar-interesse')}>Expressar interesse</button>
+              </article>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function Chat({ token, setCurrentPage }) {
+  const [usuario, setUsuario] = useState(null);
+  const [contatos, setContatos] = useState([]);
+  const [destinatarioId, setDestinatarioId] = useState('');
+  const [mensagens, setMensagens] = useState([]);
+  const [texto, setTexto] = useState('');
+  const [status, setStatus] = useState('Desconectado');
+  const [socket, setSocket] = useState(null);
+
+  useEffect(() => {
+    Promise.all([
+      apiClient.get('/usuarios/me/'),
+      apiClient.get('/interesses/'),
+    ]).then(([usuarioResponse, interessesResponse]) => {
+      const me = usuarioResponse.data;
+      const interesses = interessesResponse.data.results || interessesResponse.data;
+      setUsuario(me);
+      const contatosMap = new Map();
+      interesses.forEach((interesse) => {
+        const id = me.id === interesse.receptor_usuario_id
+          ? interesse.item_doador_usuario_id
+          : interesse.receptor_usuario_id;
+        const nome = me.id === interesse.receptor_usuario_id
+          ? interesse.item_doador_nome || 'Doador'
+          : interesse.receptor_nome || 'Receptor';
+        if (id && !contatosMap.has(id)) contatosMap.set(id, { id, nome });
+      });
+      const lista = Array.from(contatosMap.values());
+      setContatos(lista);
+      if (lista.length) setDestinatarioId(String(lista[0].id));
+    }).catch((error) => {
+      console.error('Erro ao carregar contatos do chat:', error);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!destinatarioId || !token) return undefined;
+    let activeSocket;
+    const carregar = async () => {
+      try {
+        const response = await apiClient.get(`/mensagens/conversa/?usuario_id=${destinatarioId}`);
+        setMensagens(response.data.results || response.data);
+      } catch (error) {
+        console.error('Erro ao carregar histórico:', error);
+      }
+      const configuredUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
+      const parsedUrl = new URL(configuredUrl, window.location.origin);
+      if (parsedUrl.hostname === 'web') parsedUrl.hostname = window.location.hostname;
+      parsedUrl.protocol = parsedUrl.protocol === 'https:' ? 'wss:' : 'ws:';
+      parsedUrl.pathname = parsedUrl.pathname.replace(/\/api\/?$/, '') + `/ws/chat/${destinatarioId}/`;
+      parsedUrl.search = `?token=${encodeURIComponent(token)}`;
+      activeSocket = new WebSocket(parsedUrl.toString());
+      activeSocket.onopen = () => setStatus('Online');
+      activeSocket.onclose = () => setStatus('Desconectado');
+      activeSocket.onerror = () => setStatus('Erro de conexão');
+      activeSocket.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        if (data.type === 'history') setMensagens(data.messages);
+        if (data.type === 'message') setMensagens((current) => [...current, data.message]);
+      };
+      setSocket(activeSocket);
+    };
+    carregar();
+    return () => {
+      activeSocket?.close();
+      setSocket(null);
+    };
+  }, [destinatarioId, token]);
+
+  const enviar = (event) => {
+    event.preventDefault();
+    if (!texto.trim() || !socket || socket.readyState !== WebSocket.OPEN) return;
+    socket.send(JSON.stringify({ content: texto.trim() }));
+    setTexto('');
+  };
+
+  const contatoAtual = contatos.find((contato) => String(contato.id) === String(destinatarioId));
+  return (
+    <div style={{ maxWidth: '1000px', margin: '2rem auto', padding: '1rem' }}>
+      <div style={{ background: 'white', borderRadius: '12px', padding: '1.5rem', boxShadow: '0 4px 12px rgba(0,0,0,.08)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
+          <div><h2 style={{ margin: 0 }}>💬 Chat em tempo real</h2><p style={{ color: '#666' }}>Converse com pessoas relacionadas às suas doações.</p></div>
+          <button type="button" className="button button-light" onClick={() => setCurrentPage('dashboard')}>Voltar</button>
+        </div>
+        {contatos.length === 0 ? (
+          <div className="state-card">Seus contatos aparecerão aqui após uma manifestação de interesse.</div>
+        ) : (
+          <>
+            <label style={{ display: 'block', margin: '1rem 0 .5rem', fontWeight: 600 }}>Contato</label>
+            <select value={destinatarioId} onChange={(event) => setDestinatarioId(event.target.value)} style={{ width: '100%', padding: '.75rem', color: '#23322d' }}>
+              {contatos.map((contato) => <option key={contato.id} value={contato.id}>{contato.nome}</option>)}
+            </select>
+            <div style={{ margin: '1rem 0', color: status === 'Online' ? '#2E7D32' : '#A15C00' }}>{status} {contatoAtual ? `• ${contatoAtual.nome}` : ''}</div>
+            <div style={{ minHeight: '280px', maxHeight: '420px', overflowY: 'auto', padding: '1rem', background: '#f7faf8', borderRadius: '8px' }}>
+              {mensagens.length === 0 ? <p style={{ color: '#666' }}>Nenhuma mensagem ainda.</p> : mensagens.map((mensagem) => (
+                <div key={mensagem.id} style={{ marginBottom: '.75rem', textAlign: mensagem.remetente === usuario?.id ? 'right' : 'left' }}>
+                  <span style={{ display: 'inline-block', padding: '.65rem .8rem', borderRadius: '10px', background: mensagem.remetente === usuario?.id ? '#FFF3E0' : 'white', color: '#23322d' }}>
+                    {mensagem.conteudo}
+                  </span>
+                </div>
+              ))}
+            </div>
+            <form onSubmit={enviar} style={{ display: 'flex', gap: '.75rem', marginTop: '1rem' }}>
+              <input value={texto} onChange={(event) => setTexto(event.target.value)} placeholder="Digite sua mensagem..." style={{ flex: 1, padding: '.75rem', color: '#23322d' }} />
+              <button type="submit" className="button button-primary" disabled={status !== 'Online'}>Enviar</button>
+            </form>
+          </>
         )}
       </div>
     </div>
@@ -2025,7 +2276,11 @@ function Registro({ setCurrentPage, setUser, setToken }) {
     email: '',
     password: '',
     first_name: '',
-    tipo: 'doador'
+    tipo: 'doador',
+    entidade_tipo: 'ong',
+    endereco: '',
+    latitude: '',
+    longitude: '',
   });
   const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState('');
@@ -2051,7 +2306,11 @@ function Registro({ setCurrentPage, setUser, setToken }) {
       localStorage.setItem('token', data.access);
       localStorage.setItem('access_token', data.access);
       setToken(data.access);
-      setUser({ username: formData.username, email: formData.email });
+      setUser({
+        username: formData.username,
+        email: formData.email,
+        tipo: data.user?.tipo || formData.tipo,
+      });
       setCurrentPage('dashboard');
     } catch (err) {
       setErro(err.message);
@@ -2115,6 +2374,22 @@ function Registro({ setCurrentPage, setUser, setToken }) {
               >
                 Sou receptor
               </button>
+              <button
+                type="button"
+                onClick={() => setFormData({ ...formData, tipo: 'entidade' })}
+                style={{
+                  flex: '1 1 140px',
+                  padding: '0.8rem 1rem',
+                  borderRadius: '8px',
+                  border: formData.tipo === 'entidade' ? '2px solid #FF9500' : '1px solid #ddd',
+                  background: formData.tipo === 'entidade' ? '#FFF3E0' : 'white',
+                  color: '#333',
+                  fontWeight: '700',
+                  cursor: 'pointer'
+                }}
+              >
+                Sou uma entidade
+              </button>
             </div>
           </div>
 
@@ -2137,6 +2412,30 @@ function Registro({ setCurrentPage, setUser, setToken }) {
               }}
             />
           </div>
+          {formData.tipo === 'entidade' && (
+            <>
+              <div style={{ marginBottom: '1rem' }}>
+                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '600', color: '#333' }}>Tipo de entidade</label>
+                <select name="entidade_tipo" value={formData.entidade_tipo} onChange={handleChange} disabled={loading} style={{ width: '100%', padding: '0.75rem', border: '1px solid #ddd', borderRadius: '6px', fontSize: '1rem' }}>
+                  <option value="ong">ONG</option>
+                  <option value="igreja">Igreja</option>
+                  <option value="escola">Escola</option>
+                  <option value="reciclagem">Ponto de reciclagem</option>
+                  <option value="academia">Academia</option>
+                  <option value="supermercado">Supermercado</option>
+                  <option value="associacao">Associação</option>
+                </select>
+              </div>
+              <div style={{ marginBottom: '1.5rem' }}>
+                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '600', color: '#333' }}>Endereço público</label>
+                <input type="text" name="endereco" value={formData.endereco} onChange={handleChange} placeholder="Rua, número, bairro e cidade" disabled={loading} style={{ width: '100%', padding: '0.75rem', border: '1px solid #ddd', borderRadius: '6px', fontSize: '1rem', boxSizing: 'border-box' }} />
+                <button type="button" onClick={() => navigator.geolocation?.getCurrentPosition(({ coords }) => setFormData({ ...formData, latitude: coords.latitude, longitude: coords.longitude }), () => setErro('Autorize a localização para aparecer no mapa.'))} disabled={loading} style={{ marginTop: '.6rem', background: 'none', border: 'none', color: '#d97706', fontWeight: '700', cursor: 'pointer' }}>
+                  📍 Usar minha localização no mapa
+                </button>
+                {formData.latitude && <small style={{ display: 'block', color: '#666' }}>Localização cadastrada para buscas próximas.</small>}
+              </div>
+            </>
+          )}
           <div style={{ marginBottom: '1rem' }}>
             <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '600', color: '#333' }}>Usuário</label>
             <input
@@ -2223,6 +2522,7 @@ function Registro({ setCurrentPage, setUser, setToken }) {
 
 function Profile({ setCurrentPage, setUser, setToken, token }) {
   const [data, setData] = useState(null);
+  const [receptorData, setReceptorData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState('');
@@ -2233,6 +2533,10 @@ function Profile({ setCurrentPage, setUser, setToken, token }) {
       try {
         const resp = await apiClient.get('/usuarios/me/');
         setData(resp.data);
+        if (resp.data.tipo === 'receptor') {
+          const receptorResp = await apiClient.get('/receptores/me/');
+          setReceptorData(receptorResp.data);
+        }
       } catch (err) {
         console.error('Erro ao carregar perfil:', err);
       } finally {
@@ -2251,14 +2555,19 @@ function Profile({ setCurrentPage, setUser, setToken, token }) {
     setSaving(true);
     setFeedback('');
     try {
+      if (receptorData) {
+        await apiClient.patch('/receptores/me/', receptorData);
+      }
       const payload = {
         first_name: data.user?.first_name || data.user?.username || '',
         email: data.user?.email || '',
         telefone: data.telefone || '',
         endereco: data.endereco || '',
-        latitude: data.latitude || null,
-        longitude: data.longitude || null
       };
+      if (data.pode_configurar_localizacao || (receptorData && receptorData.tipo !== 'pessoa')) {
+        payload.latitude = data.latitude || null;
+        payload.longitude = data.longitude || null;
+      }
       const resp = await apiClient.patch('/usuarios/me/', payload);
       setData(resp.data);
       setUser((u) => ({ ...u, username: resp.data.user?.username || u?.username }));
@@ -2269,6 +2578,20 @@ function Profile({ setCurrentPage, setUser, setToken, token }) {
     } finally {
       setSaving(false);
     }
+  };
+
+  const capturarLocalizacao = () => {
+    if (!navigator.geolocation) {
+      setFeedback('Seu navegador não oferece geolocalização.');
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      ({ coords }) => {
+        setData((current) => ({ ...current, latitude: coords.latitude, longitude: coords.longitude }));
+        setFeedback('Localização capturada. Clique em Salvar para confirmar.');
+      },
+      () => setFeedback('Não foi possível obter sua localização. Autorize o acesso no navegador.')
+    );
   };
 
   const handleDelete = async () => {
@@ -2294,6 +2617,10 @@ function Profile({ setCurrentPage, setUser, setToken, token }) {
     <div style={{ padding: '2rem', textAlign: 'center' }}>Perfil não encontrado.</div>
   );
 
+  const podeConfigurarLocalizacao = data.pode_configurar_localizacao || (
+    receptorData && receptorData.tipo !== 'pessoa'
+  );
+
   return (
     <div style={{ maxWidth: '900px', margin: '2rem auto', padding: '1rem' }}>
       <div style={{ background: 'white', padding: '1.5rem', borderRadius: '12px', boxShadow: '0 4px 12px rgba(0,0,0,0.06)' }}>
@@ -2316,16 +2643,36 @@ function Profile({ setCurrentPage, setUser, setToken, token }) {
             <label style={{ display: 'block', marginBottom: '0.5rem' }}>Endereço</label>
             <input name="endereco" value={data.endereco || ''} onChange={handleChange} style={{ width: '100%', padding: '0.5rem' }} />
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
+          {receptorData && (
             <div>
-              <label style={{ display: 'block', marginBottom: '0.5rem' }}>Latitude</label>
-              <input name="latitude" value={data.latitude || ''} onChange={handleChange} style={{ width: '100%', padding: '0.5rem' }} />
+              <label style={{ display: 'block', marginBottom: '0.5rem' }}>Tipo de receptor</label>
+              <select value={receptorData.tipo} onChange={(event) => setReceptorData({ ...receptorData, tipo: event.target.value })} style={{ width: '100%', padding: '0.5rem' }}>
+                <option value="pessoa">Pessoa física</option>
+                <option value="ong">ONG</option>
+                <option value="igreja">Igreja</option>
+                <option value="escola">Escola</option>
+                <option value="reciclagem">Ponto de reciclagem</option>
+              </select>
+              <small style={{ color: '#666' }}>A localização do perfil fica disponível apenas para entidades.</small>
             </div>
+          )}
+          {podeConfigurarLocalizacao && (
             <div>
-              <label style={{ display: 'block', marginBottom: '0.5rem' }}>Longitude</label>
-              <input name="longitude" value={data.longitude || ''} onChange={handleChange} style={{ width: '100%', padding: '0.5rem' }} />
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '0.5rem' }}>Latitude</label>
+                  <input name="latitude" value={data.latitude || ''} onChange={handleChange} style={{ width: '100%', padding: '0.5rem' }} />
+                </div>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '0.5rem' }}>Longitude</label>
+                  <input name="longitude" value={data.longitude || ''} onChange={handleChange} style={{ width: '100%', padding: '0.5rem' }} />
+                </div>
+              </div>
+              <button type="button" onClick={capturarLocalizacao} style={{ marginTop: '.5rem', background: 'transparent', color: '#FF9500', border: '1px solid #FF9500', padding: '.6rem .8rem', borderRadius: '6px' }}>
+                Usar minha localização atual
+              </button>
             </div>
-          </div>
+          )}
 
           <div style={{ display: 'flex', gap: '0.5rem' }}>
             <button type="submit" disabled={saving} style={{ background: '#FF9500', color: 'white', border: 'none', padding: '0.75rem 1rem', borderRadius: '6px' }}>{saving ? 'Salvando...' : 'Salvar'}</button>
@@ -2364,8 +2711,8 @@ export default function App() {
     fetchMe();
   }, [token, user]);
   const isItemPage = currentPage.startsWith('item-');
-  const isKnownPage = ['home', 'explorar', 'eventos', 'pontos-coleta', 'login', 'registro', 'dashboard', 'meus-itens', 'meus-interesses', 'expressar-interesse', 'perfil'].includes(currentPage) || isItemPage;
-  const requiresToken = currentPage === 'dashboard' || currentPage === 'meus-itens' || currentPage === 'perfil' || isItemPage;
+  const isKnownPage = ['home', 'explorar', 'eventos', 'pontos-coleta', 'login', 'registro', 'dashboard', 'meus-itens', 'meus-interesses', 'matches', 'chat', 'expressar-interesse', 'perfil'].includes(currentPage) || isItemPage;
+  const requiresToken = currentPage === 'dashboard' || currentPage === 'meus-itens' || currentPage === 'perfil' || currentPage === 'matches' || currentPage === 'chat' || isItemPage;
   const showHome = !isKnownPage || currentPage === 'home' || (requiresToken && !token);
 
   useEffect(() => {
@@ -2389,6 +2736,8 @@ export default function App() {
           {currentPage === 'dashboard' && token && <Dashboard user={user} setCurrentPage={setCurrentPage} token={token} />}
           {currentPage === 'meus-itens' && token && <MeusItens token={token} setCurrentPage={setCurrentPage} />}
           {currentPage === 'meus-interesses' && token && <MeusInteresses setCurrentPage={setCurrentPage} />}
+          {currentPage === 'matches' && token && <Matches setCurrentPage={setCurrentPage} />}
+          {currentPage === 'chat' && token && <Chat token={token} setCurrentPage={setCurrentPage} />}
           {currentPage === 'expressar-interesse' && <ExpressarInteresse setCurrentPage={setCurrentPage} token={token} />}
           {isItemPage && token && <ItemInteresses itemId={currentPage.replace('item-', '')} setCurrentPage={setCurrentPage} />}
         </main>

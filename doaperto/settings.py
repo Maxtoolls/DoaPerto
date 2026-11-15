@@ -38,6 +38,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'corsheaders',
+    'channels',
     'rest_framework',
     'rest_framework_simplejwt',
     'django_filters',
@@ -74,6 +75,7 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'doaperto.wsgi.application'
+ASGI_APPLICATION = 'doaperto.asgi.application'
 
 
 # Database
@@ -122,6 +124,8 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/4.2/howto/static-files/
 
 STATIC_URL = 'static/'
+MEDIA_URL = 'media/'
+MEDIA_ROOT = BASE_DIR / 'media'
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
@@ -153,6 +157,12 @@ REST_FRAMEWORK = {
         'rest_framework.filters.SearchFilter',
         'rest_framework.filters.OrderingFilter',
     ),
+}
+
+CHANNEL_LAYERS = {
+    'default': {
+        'BACKEND': 'channels.layers.InMemoryChannelLayer',
+    },
 }
 
 # JWT Configuration

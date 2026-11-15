@@ -11,6 +11,9 @@ const apiClient = axios.create({
 
 apiClient.interceptors.request.use((config) => {
   const token = localStorage.getItem('access_token') || localStorage.getItem('token');
+  if (config.data instanceof FormData) {
+    delete config.headers['Content-Type'];
+  }
   // debug: show when requests are sent and whether a token is present
   // (remove or lower verbosity in production)
   console.debug('[apiClient] Request:', config.method, config.url, 'tokenPresent=', !!token);

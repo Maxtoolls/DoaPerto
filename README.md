@@ -221,14 +221,20 @@ npm run dev
 - [x] Eventos de doação com período, entidade, endereço e categorias aceitas
 
 ### Fase 3 (MVP Features)
-- [ ] Geolocalização completa do usuário
-- [ ] Listagem com filtros avançados
-- [ ] Chat em tempo real (WebSockets)
-- [ ] Sistema de matching doador-receptor
-- [ ] Upload de imagens
+- [x] Geolocalização completa do usuário (disponível somente para instituições ou entidades)
+- [x] Listagem com filtros avançados
+- [x] Chat em tempo real (WebSockets)
+- [x] Sistema de matching doador-receptor
+- [x] Upload de imagens das doações (disponível para todos)
 
 ### Fase 4 (UX Completa)
-- [ ] Jornada de 5 etapas da persona
+- [x] Jornada de 5 etapas da persona
+- [x] Layout responsivo com contraste acessível e estados vazios orientativos
+- [x] Busca por palavra-chave, categoria e disponibilidade
+- [x] Tela de pontos de coleta com localização por proximidade
+- [x] Eventos de doação para academias, ONGs, supermercados e associações
+- [x] Cadastro e login de entidades receptoras com endereço e localização pública
+- [x] Lista pública de entidades próximas e itens destinados a cada entidade
 - [ ] Sistema de referral/indicação
 - [ ] Notificações
 - [ ] Histórico de transações
@@ -239,6 +245,20 @@ npm run dev
 - ✅ Mascaramento de CPF/CNPJ
 - ✅ Campo para deleção de dados
 - ⏳ Implementar soft delete e anonimização
+
+## Entidades receptoras
+
+Entidades podem criar uma conta selecionando **Sou uma entidade** no cadastro.
+Os tipos disponíveis incluem ONG, igreja, escola, ponto de reciclagem, academia,
+supermercado e associação. Após o cadastro, a entidade pode complementar seu
+perfil com endereço e localização; esses dados aparecem na tela **Onde doar e
+receber**, junto dos itens disponíveis destinados a ela.
+
+Endpoints públicos relacionados:
+
+- `GET /api/receptores/entidades/`
+- `GET /api/receptores/entidades/?lat=-23.55&lon=-46.63&km=20`
+- `GET /api/receptores/{id}/itens-disponiveis/`
 
 ## Como Testar
 

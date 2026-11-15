@@ -93,6 +93,9 @@ class Receptor(models.Model):
         ('igreja', 'Igreja'),
         ('escola', 'Escola'),
         ('reciclagem', 'Ponto de Reciclagem'),
+        ('academia', 'Academia'),
+        ('supermercado', 'Supermercado'),
+        ('associacao', 'Associação'),
     ]
 
     usuario = models.OneToOneField(Usuario, on_delete=models.CASCADE, related_name='receptor')
@@ -227,7 +230,7 @@ class ItemDoacao(models.Model):
     receptor_confirmado = models.ForeignKey(Receptor, on_delete=models.SET_NULL, null=True, blank=True)
     ponto_coleta = models.ForeignKey(PontoColeta, on_delete=models.SET_NULL, null=True, blank=True)
     pode_retirar_diretamente = models.BooleanField(default=True)
-    imagem = models.CharField(max_length=255, blank=True)
+    imagem = models.ImageField(upload_to='doacoes/', blank=True)
     data_criacao = models.DateTimeField(auto_now_add=True)
     data_expiracao = models.DateTimeField(null=True, blank=True)
 
