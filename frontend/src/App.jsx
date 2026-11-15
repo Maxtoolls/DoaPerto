@@ -1281,7 +1281,15 @@ function MeusItens({ token, setCurrentPage }) {
                         <div style={{ marginTop: '0.5rem', display: 'grid', gap: '0.5rem' }}>
                           {item.interesses.map((it) => (
                             <div key={it.id} style={{ background: '#FAFAFA', padding: '0.6rem', borderRadius: '8px', border: '1px solid #eee' }}>
-                              <div style={{ fontWeight: '700', color: '#333' }}>{it.receptor_nome || it.receptor}</div>
+                              <div style={{ fontWeight: '700', color: '#333' }}>
+                                {it.receptor_nome || it.receptor_responsavel || 'Receptor sem nome informado'}
+                              </div>
+                              <div style={{ color: '#666', fontSize: '0.82rem', marginTop: '0.2rem' }}>
+                                {it.receptor_tipo && `Tipo: ${it.receptor_tipo}`}
+                                {it.receptor_email && ` • ${it.receptor_email}`}
+                              </div>
+                              {it.receptor_telefone && <div style={{ color: '#666', fontSize: '0.82rem' }}>☎️ {it.receptor_telefone}</div>}
+                              {it.receptor_endereco && <div style={{ color: '#666', fontSize: '0.82rem' }}>📍 {it.receptor_endereco}</div>}
                               {it.mensagem_inicial && <div style={{ color: '#666', fontSize: '0.9rem' }}>{it.mensagem_inicial}</div>}
                               <div style={{ marginTop: '0.25rem' }}><span style={{ background: '#FFF3E0', color: '#A15C00', padding: '0.2rem 0.5rem', borderRadius: '6px', fontSize: '0.75rem' }}>{it.status}</span></div>
                             </div>
@@ -1527,6 +1535,7 @@ function MeusInteresses({ setCurrentPage }) {
             {interesses.map((interesse) => (
               <div key={interesse.id} style={{ background: 'white', borderRadius: '12px', padding: '1.5rem', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
                 <h4 style={{ color: '#333', marginBottom: '0.5rem' }}>{interesse.item_titulo || 'Item'}</h4>
+                {interesse.item_doador_nome && <p style={{ color: '#666', marginBottom: '0.5rem' }}>Doador: {interesse.item_doador_nome}</p>}
                 <p style={{ color: '#666', marginBottom: '0.75rem' }}>{interesse.mensagem_inicial || 'Sem mensagem inicial.'}</p>
                 <span style={{ background: '#FFF3E0', color: '#FF9500', padding: '0.3rem 0.8rem', borderRadius: '20px', fontSize: '0.8rem', fontWeight: 'bold' }}>
                   {interesse.status}

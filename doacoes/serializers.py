@@ -168,6 +168,17 @@ class InteresseSerializer(serializers.ModelSerializer):
         source='receptor.usuario.user.get_full_name',
         read_only=True
     )
+    receptor_email = serializers.EmailField(
+        source='receptor.usuario.user.email', read_only=True
+    )
+    receptor_telefone = serializers.SerializerMethodField()
+    receptor_endereco = serializers.CharField(
+        source='receptor.usuario.endereco', read_only=True
+    )
+    receptor_tipo = serializers.CharField(source='receptor.tipo', read_only=True)
+    receptor_responsavel = serializers.CharField(
+        source='receptor.responsavel', read_only=True
+    )
     item_doador_nome = serializers.CharField(
         source='item.doador.usuario.user.get_full_name',
         read_only=True
@@ -183,10 +194,18 @@ class InteresseSerializer(serializers.ModelSerializer):
         model = Interesse
         fields = [
             'id', 'item', 'item_titulo', 'item_doador_nome', 'receptor', 'receptor_nome',
+            'receptor_email', 'receptor_telefone', 'receptor_endereco',
+            'receptor_tipo', 'receptor_responsavel',
             'receptor_usuario_id', 'item_doador_usuario_id',
             'status', 'mensagem_inicial', 'data_criacao', 'data_atualizacao'
         ]
         read_only_fields = ['id', 'data_criacao', 'data_atualizacao']
+
+    def get_receptor_telefone(self, interesse):
+        return (
+            interesse.receptor.telefone_contato
+            or interesse.receptor.usuario.telefone
+        )
 
 
 class ItemDoacaoSerializer(serializers.ModelSerializer):
@@ -206,7 +225,7 @@ class ItemDoacaoSerializer(serializers.ModelSerializer):
         source='ponto_coleta.nome',
         read_only=True
     )
-    interesses = InteresseSerializer(many=True, read_only=True)
+    interesses = serializers.SerializerMethodField()
 
     class Meta:
         model = ItemDoacao
@@ -221,6 +240,25 @@ class ItemDoacaoSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id', 'data_criacao', 'status', 'doador']
 
+    def get_interesses(self, item):
+        request = self.context.get('request')
+        user = getattr(request, 'user', None)
+        if not user or not user.is_authenticated:
+            return []
+
+        pode_visualizar = (
+            item.doador.usuario.user_id == user.id
+            or Interesse.objects.filter(
+                item=item, receptor__usuario__user=user
+            ).exists()
+        )
+        if not pode_visualizar:
+            return []
+        return InteresseSerializer(
+            item.interesses.all(),
+            many=True,
+            context=self.context,
+        ).data
 
 
 class MensagemSerializer(serializers.ModelSerializer):

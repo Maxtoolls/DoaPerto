@@ -25,6 +25,7 @@ que ilustra bem a dinâmica de praticidade, conscientização e interação entr
 - `make_receptor` management command (cria/garante `Receptor` para um `Usuario`).
 - `registro` API agora aceita `tipo` ("doador" ou "receptor") e cria o perfil correspondente.
 - `ItemDoacaoSerializer` expõe `interesses` para que o doador veja quem manifestou interesse.
+- Cada interesse exibe nome, tipo, e-mail, telefone e endereço do receptor autorizado a visualizar o item.
 - Frontend: telas de `Registro` com botões "Sou doador" / "Sou receptor"; `Meus Itens` mostra interessados inline; `Expressar Interesse` página/ação.
 
 ## Melhorias de UX baseadas nas personas
