@@ -28,7 +28,8 @@ apiClient.interceptors.response.use(
   (error) => {
     // log server error body to console for easier debugging
     console.debug('[apiClient] Response error:', error.response?.status, error.response?.data);
-    if (error.response?.status === 401) {
+    const isAuthenticationRequest = error.config?.url?.includes('/token/');
+    if (error.response?.status === 401 && !isAuthenticationRequest) {
       sessionStorage.removeItem('access_token');
       sessionStorage.removeItem('token');
       sessionStorage.removeItem('refresh_token');
