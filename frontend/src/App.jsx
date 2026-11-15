@@ -2322,7 +2322,7 @@ function Registro({ setCurrentPage, setUser, setToken }) {
       });
       setCurrentPage('dashboard');
     } catch (err) {
-      setErro(err.message);
+      setErro(err.response?.data?.detail || err.response?.data?.error || err.message);
     } finally {
       setLoading(false);
     }

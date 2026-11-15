@@ -1,10 +1,11 @@
 from rest_framework import viewsets, permissions, status, filters, generics
 from rest_framework.decorators import action, api_view, permission_classes
-from rest_framework.parsers import FormParser, MultiPartParser
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 from django_filters.rest_framework import DjangoFilterBackend
 from django.contrib.auth.models import User
+from django.db import transaction
 from django.db.models import Q
 from math import radians, sin, cos, sqrt, atan2
 
@@ -301,7 +302,7 @@ class ItemDoacaoViewSet(viewsets.ModelViewSet):
     ]
     search_fields = ['titulo', 'descricao']
     ordering_fields = ['data_criacao', 'quantidade']
-    parser_classes = [MultiPartParser, FormParser]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     def get_queryset(self):
         queryset = super().get_queryset()
@@ -368,25 +369,34 @@ class ItemDoacaoViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'], permission_classes=[permissions.IsAuthenticated])
     def expressar_interesse(self, request, pk=None):
         item = self.get_object()
-        try:
-            receptor = Receptor.objects.get(usuario__user=request.user)
-            interesse, created = Interesse.objects.get_or_create(
-                item=item,
-                receptor=receptor,
-                defaults={'mensagem_inicial': request.data.get('mensagem', '')}
-            )
-            if not created:
-                return Response(
-                    {'error': 'Você já expressou interesse neste item'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            serializer = InteresseSerializer(interesse)
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        except Receptor.DoesNotExist:
+        usuario = Usuario.objects.filter(user=request.user).first()
+        if not usuario or usuario.tipo != 'receptor':
             return Response(
-                {'error': 'Apenas receptores podem expressar interesse'},
+                {'error': 'Apenas contas cadastradas como receptor podem expressar interesse.'},
                 status=status.HTTP_403_FORBIDDEN
             )
+
+        # Repara perfis antigos que possuem Usuario como receptor, mas ficaram
+        # sem o registro complementar Receptor após um cadastro interrompido.
+        receptor, _ = Receptor.objects.get_or_create(
+            usuario=usuario,
+            defaults={
+                'tipo': 'pessoa',
+                'cnpj': f'PENDENTE{request.user.id}',
+            },
+        )
+        interesse, created = Interesse.objects.get_or_create(
+            item=item,
+            receptor=receptor,
+            defaults={'mensagem_inicial': request.data.get('mensagem', '')}
+        )
+        if not created:
+            return Response(
+                {'error': 'Você já expressou interesse neste item'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        serializer = InteresseSerializer(interesse)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
 
     @action(detail=False, methods=['get'])
     def meus_itens(self, request):
@@ -586,40 +596,43 @@ def registro(request):
         logger.warning('registro username exists: %s; data=%s', username, data)
         return Response({'detail': 'Usuário já existe'}, status=status.HTTP_400_BAD_REQUEST)
 
+    latitude = data.get('latitude') or None
+    longitude = data.get('longitude') or None
+
     try:
-        user = User.objects.create_user(
-            username=username,
-            email=email,
-            password=password,
-            first_name=first_name
-        )
-
-        usuario = Usuario.objects.create(
-            user=user,
-            tipo=tipo,
-            endereco=data.get('endereco', '') if tipo == 'receptor' else '',
-            latitude=data.get('latitude') if tipo == 'receptor' else None,
-            longitude=data.get('longitude') if tipo == 'receptor' else None,
-            aceite_termos=True,
-        )
-
-        if usuario.tipo == 'doador':
-            Doador.objects.get_or_create(
-                usuario=usuario,
-                defaults={'cpf': f'{user.id:011d}'}
-            )
-        else:
-            Receptor.objects.get_or_create(
-                usuario=usuario,
-                defaults={
-                    'tipo': entidade_tipo if tipo_conta == 'entidade' and entidade_tipo in tipos_entidade else 'pessoa',
-                    # Receptor.cnpj is unique; keep the optional field collision-free
-                    # until the institution completes its profile.
-                    'cnpj': f'PENDENTE{user.id}',
-                }
+        with transaction.atomic():
+            user = User.objects.create_user(
+                username=username,
+                email=email,
+                password=password,
+                first_name=first_name
             )
 
-        refresh = RefreshToken.for_user(user)
+            usuario = Usuario.objects.create(
+                user=user,
+                tipo=tipo,
+                endereco=data.get('endereco', '') if tipo == 'receptor' else '',
+                latitude=latitude if tipo == 'receptor' else None,
+                longitude=longitude if tipo == 'receptor' else None,
+                aceite_termos=True,
+            )
+
+            if usuario.tipo == 'doador':
+                Doador.objects.get_or_create(
+                    usuario=usuario,
+                    defaults={'cpf': f'{user.id:011d}'}
+                )
+            else:
+                Receptor.objects.get_or_create(
+                    usuario=usuario,
+                    defaults={
+                        'tipo': entidade_tipo if tipo_conta == 'entidade' and entidade_tipo in tipos_entidade else 'pessoa',
+                        'cnpj': f'PENDENTE{user.id}',
+                    }
+                )
+
+            refresh = RefreshToken.for_user(user)
+
         logger.info('registro success: username=%s id=%s', user.username, user.id)
         return Response({
             'access': str(refresh.access_token),

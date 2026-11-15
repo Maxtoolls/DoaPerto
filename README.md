@@ -26,6 +26,10 @@ que ilustra bem a dinâmica de praticidade, conscientização e interação entr
 - `registro` API agora aceita `tipo` ("doador" ou "receptor") e cria o perfil correspondente.
 - `ItemDoacaoSerializer` expõe `interesses` para que o doador veja quem manifestou interesse.
 - Cada interesse exibe nome, tipo, e-mail, telefone e endereço do receptor autorizado a visualizar o item.
+- O endpoint de interesse valida o perfil autenticado e recupera automaticamente perfis
+  receptores antigos que ficaram sem o registro complementar.
+- O cadastro de receptor aceita endereço sem exigir coordenadas; latitude e longitude
+  são opcionais e ficam como `null` até a entidade ou receptor informar sua localização.
 - Frontend: telas de `Registro` com botões "Sou doador" / "Sou receptor"; `Meus Itens` mostra interessados inline; `Expressar Interesse` página/ação.
 
 ## Melhorias de UX baseadas nas personas
