@@ -10,7 +10,7 @@ const apiClient = axios.create({
 });
 
 apiClient.interceptors.request.use((config) => {
-  const token = localStorage.getItem('access_token') || localStorage.getItem('token');
+  const token = sessionStorage.getItem('access_token') || sessionStorage.getItem('token');
   if (config.data instanceof FormData) {
     delete config.headers['Content-Type'];
   }
@@ -29,10 +29,10 @@ apiClient.interceptors.response.use(
     // log server error body to console for easier debugging
     console.debug('[apiClient] Response error:', error.response?.status, error.response?.data);
     if (error.response?.status === 401) {
-      localStorage.removeItem('access_token');
-      localStorage.removeItem('token');
-      localStorage.removeItem('refresh_token');
-      localStorage.removeItem('user');
+      sessionStorage.removeItem('access_token');
+      sessionStorage.removeItem('token');
+      sessionStorage.removeItem('refresh_token');
+      sessionStorage.removeItem('user');
       window.location.href = '/login';
     }
     return Promise.reject(error);

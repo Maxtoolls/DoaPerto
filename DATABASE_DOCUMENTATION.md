@@ -1,7 +1,7 @@
 # 📊 DoaPerto - Documentação do Banco de Dados
 
 > Atualizada conforme os modelos e migrações atuais do projeto. A última migração
-> documentada é `doacoes.0007_eventodoacao`.
+> documentada é `doacoes.0009_alter_receptor_tipo`.
 
 ## Visão Geral
 
@@ -185,7 +185,7 @@ Itens Específicos para Doação
 ---
 
 ### 9. **doacoes_interesse**
-Interesse de Receptor em Item
+Interesse de Conta em Item
 
 | Campo | Tipo | Descrição |
 |-------|------|-----------|
@@ -193,16 +193,17 @@ Interesse de Receptor em Item
 | item_id | INT | FK para doacoes_itemdoacao |
 | receptor_id | INT | FK para doacoes_receptor |
 | status | VARCHAR(20) | 'interesse', 'confirmado', 'cancelado', 'finalizado' |
-| mensagem_inicial | TEXT | Mensagem do receptor |
-| data_criacao | DATETIME | Quando expressou interesse |
+| mensagem_inicial | TEXT | Mensagem da conta interessada |
+| data_criacao | DATETIME | Quando a conta expressou interesse |
 | data_atualizacao | DATETIME | Última atualização |
 
-**Unique:** (item_id, receptor_id) - um interesse por receptor/item
+**Unique:** (item_id, receptor_id) - um interesse por conta/item. Contas sem perfil
+Receptor recebem o perfil complementar necessário para manter este relacionamento.
 
 ---
 
 ### 10. **doacoes_mensagem**
-Chat entre Doador e Receptor
+Chat entre usuários autenticados, incluindo doadores e receptores
 
 | Campo | Tipo | Descrição |
 |-------|------|-----------|

@@ -14,9 +14,9 @@ export default function Login({ setIsAuthenticated, setUser }) {
     setLoading(true);
     try {
       const response = await apiClient.post('/token/', { username, password });
-      localStorage.setItem('access_token', response.data.access);
-      localStorage.setItem('refresh_token', response.data.refresh);
-      localStorage.setItem('user', JSON.stringify({ username, first_name: username }));
+      sessionStorage.setItem('access_token', response.data.access);
+      sessionStorage.setItem('refresh_token', response.data.refresh);
+      sessionStorage.setItem('user', JSON.stringify({ username, first_name: username }));
       setUser({ username, first_name: username });
       setIsAuthenticated(true);
       navigate('/');

@@ -10,6 +10,11 @@ que ilustra bem a dinâmica de praticidade, conscientização e interação entr
 
 <img width="2800" height="1318" alt="eac2f3f5-59ce-4ac5-85bb-e8e6d33ba77d" src="https://github.com/user-attachments/assets/c5527525-54b6-4bda-82c7-936b5ad87b25" />
 
+### Protótipo
+
+O protótipo de UX e as jornadas do DoaPerto estão disponíveis no Miro:
+
+[Acessar o protótipo do DoaPerto](https://miro.com/app/board/uXjVENwon3o=/?share_link_id=937134404651)
 
 
 
@@ -25,12 +30,17 @@ que ilustra bem a dinâmica de praticidade, conscientização e interação entr
 - `make_receptor` management command (cria/garante `Receptor` para um `Usuario`).
 - `registro` API agora aceita `tipo` ("doador" ou "receptor") e cria o perfil correspondente.
 - `ItemDoacaoSerializer` expõe `interesses` para que o doador veja quem manifestou interesse.
-- Cada interesse exibe nome, tipo, e-mail, telefone e endereço do receptor autorizado a visualizar o item.
-- O endpoint de interesse valida o perfil autenticado e recupera automaticamente perfis
-  receptores antigos que ficaram sem o registro complementar.
+- Cada interesse exibe nome, tipo, e-mail, telefone e endereço da conta interessada autorizada a visualizar o item.
+- Todas as contas autenticadas, sejam doadoras ou receptoras, podem expressar interesse.
+  Quando necessário, o backend recupera ou cria o perfil complementar usado pelo modelo
+  de interesses.
 - O cadastro de receptor aceita endereço sem exigir coordenadas; latitude e longitude
   são opcionais e ficam como `null` até a entidade ou receptor informar sua localização.
 - Frontend: telas de `Registro` com botões "Sou doador" / "Sou receptor"; `Meus Itens` mostra interessados inline; `Expressar Interesse` página/ação.
+- A autenticação do frontend usa `sessionStorage`, mantendo sessões independentes em
+  abas diferentes do navegador.
+- O chat suporta WebSocket para mensagens em tempo real e fallback HTTP com atualização
+  periódica quando a conexão WebSocket não estiver disponível.
 
 ## Melhorias de UX baseadas nas personas
 
@@ -187,7 +197,8 @@ npm run dev
 - `GET/POST /api/eventos-doacao/` - Campanhas e eventos de arrecadação
 - `GET /api/eventos-doacao/meus_eventos/` - Eventos criados pelo usuário autenticado
 - `GET/POST /api/itens-doacao/` - Itens para doação
-- `GET/POST /api/mensagens/` - Mensagens
+- `GET/POST /api/mensagens/` - Mensagens do chat; o remetente é definido pelo token autenticado
+- `GET /api/mensagens/conversa/?usuario_id=<id>` - Histórico da conversa com outro usuário
 - `GET/POST /api/interesses/` - Expressar interesse
 
 ### Filtros Geográficos
@@ -205,8 +216,8 @@ npm run dev
 - **EventoDoacao** - Campanha temporária organizada por uma academia, ONG, mercado,
   associação ou outra entidade
 - **ItemDoacao** - Item disponível para doação
-- **Interesse** - Interesse do receptor em um item
-- **Mensagem** - Chat entre usuários
+- **Interesse** - Interesse de uma conta autenticada em um item
+- **Mensagem** - Chat entre usuários, com suporte a WebSocket e fallback HTTP
 
 ## Funcionalidades
 
@@ -229,9 +240,11 @@ npm run dev
 - [x] Geolocalização completa do usuário (disponível somente para instituições ou entidades)
 - [x] Listagem com filtros avançados
 - [x] Chat em tempo real (WebSockets)
+- [x] Isolamento de sessão por aba do navegador
+- [x] Envio de mensagens por HTTP quando o WebSocket estiver indisponível
 - [x] Sistema de matching doador-receptor
 - [x] Upload de imagens das doações (disponível para todos)
-
+vnc
 ### Fase 4 (UX Completa)
 - [x] Jornada de 5 etapas da persona
 - [x] Layout responsivo com contraste acessível e estados vazios orientativos

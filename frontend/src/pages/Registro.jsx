@@ -33,9 +33,9 @@ export default function Registro({ setIsAuthenticated, setUser }) {
         password: formData.password,
       });
 
-      localStorage.setItem('access_token', loginResponse.data.access);
-      localStorage.setItem('refresh_token', loginResponse.data.refresh);
-      localStorage.setItem('user', JSON.stringify({
+      sessionStorage.setItem('access_token', loginResponse.data.access);
+      sessionStorage.setItem('refresh_token', loginResponse.data.refresh);
+      sessionStorage.setItem('user', JSON.stringify({
         username: formData.username,
         first_name: formData.first_name
       }));

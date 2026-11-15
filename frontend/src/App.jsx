@@ -4,8 +4,8 @@ import './App.css';
 
 function Navbar({ currentPage, setCurrentPage, user, setUser, setToken }) {
   const handleLogout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('access_token');
+    sessionStorage.removeItem('token');
+    sessionStorage.removeItem('access_token');
     setToken(null);
     setUser(null);
     setCurrentPage('home');
@@ -1598,6 +1598,7 @@ function Chat({ token, setCurrentPage }) {
   const [texto, setTexto] = useState('');
   const [status, setStatus] = useState('Desconectado');
   const [socket, setSocket] = useState(null);
+  const [enviando, setEnviando] = useState(false);
 
   useEffect(() => {
     Promise.all([
@@ -1628,13 +1629,20 @@ function Chat({ token, setCurrentPage }) {
   useEffect(() => {
     if (!destinatarioId || !token) return undefined;
     let activeSocket;
+    let disposed = false;
+    let httpConnected = false;
+    setStatus('Conectando...');
     const carregar = async () => {
       try {
         const response = await apiClient.get(`/mensagens/conversa/?usuario_id=${destinatarioId}`);
         setMensagens(response.data.results || response.data);
+        httpConnected = true;
+        setStatus('Online');
       } catch (error) {
         console.error('Erro ao carregar histórico:', error);
+        if (!disposed) setStatus('Erro de conexão');
       }
+      if (disposed) return;
       const configuredUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
       const parsedUrl = new URL(configuredUrl, window.location.origin);
       if (parsedUrl.hostname === 'web') parsedUrl.hostname = window.location.hostname;
@@ -1642,28 +1650,77 @@ function Chat({ token, setCurrentPage }) {
       parsedUrl.pathname = parsedUrl.pathname.replace(/\/api\/?$/, '') + `/ws/chat/${destinatarioId}/`;
       parsedUrl.search = `?token=${encodeURIComponent(token)}`;
       activeSocket = new WebSocket(parsedUrl.toString());
-      activeSocket.onopen = () => setStatus('Online');
-      activeSocket.onclose = () => setStatus('Desconectado');
-      activeSocket.onerror = () => setStatus('Erro de conexão');
+      activeSocket.onopen = () => {
+        if (!disposed) setStatus('Online');
+      };
+      activeSocket.onclose = (event) => {
+        if (!disposed) {
+          console.error('WebSocket do chat encerrado:', event.code, event.reason);
+          setStatus(
+            event.code === 4401 || event.code === 4403
+              ? 'Não autorizado'
+              : httpConnected ? 'Online' : 'Desconectado'
+          );
+        }
+      };
+      activeSocket.onerror = () => {
+        if (!disposed && !httpConnected) setStatus('Erro de conexão');
+      };
       activeSocket.onmessage = (event) => {
         const data = JSON.parse(event.data);
         if (data.type === 'history') setMensagens(data.messages);
         if (data.type === 'message') setMensagens((current) => [...current, data.message]);
       };
       setSocket(activeSocket);
+
+      const polling = window.setInterval(async () => {
+        try {
+          const response = await apiClient.get(`/mensagens/conversa/?usuario_id=${destinatarioId}`);
+          const novasMensagens = response.data.results || response.data;
+          setMensagens((atuais) => {
+            const porId = new Map(atuais.map((mensagem) => [mensagem.id, mensagem]));
+            novasMensagens.forEach((mensagem) => porId.set(mensagem.id, mensagem));
+            return Array.from(porId.values()).sort(
+              (a, b) => new Date(a.data_criacao) - new Date(b.data_criacao)
+            );
+          });
+        } catch (error) {
+          console.error('Erro ao atualizar mensagens:', error);
+        }
+      }, 3000);
+
+      activeSocket.addEventListener('close', () => window.clearInterval(polling), { once: true });
     };
     carregar();
     return () => {
+      disposed = true;
       activeSocket?.close();
       setSocket(null);
     };
   }, [destinatarioId, token]);
 
-  const enviar = (event) => {
+  const enviar = async (event) => {
     event.preventDefault();
-    if (!texto.trim() || !socket || socket.readyState !== WebSocket.OPEN) return;
-    socket.send(JSON.stringify({ content: texto.trim() }));
-    setTexto('');
+    const conteudo = texto.trim();
+    if (!conteudo || !destinatarioId || enviando) return;
+
+    setEnviando(true);
+    try {
+      if (socket?.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify({ content: conteudo }));
+      } else {
+        const response = await apiClient.post('/mensagens/', {
+          destinatario: Number(destinatarioId),
+          conteudo,
+        });
+        setMensagens((current) => [...current, response.data]);
+      }
+      setTexto('');
+    } catch (error) {
+      console.error('Erro ao enviar mensagem:', error);
+    } finally {
+      setEnviando(false);
+    }
   };
 
   const contatoAtual = contatos.find((contato) => String(contato.id) === String(destinatarioId));
@@ -1694,7 +1751,9 @@ function Chat({ token, setCurrentPage }) {
             </div>
             <form onSubmit={enviar} style={{ display: 'flex', gap: '.75rem', marginTop: '1rem' }}>
               <input value={texto} onChange={(event) => setTexto(event.target.value)} placeholder="Digite sua mensagem..." style={{ flex: 1, padding: '.75rem', color: '#23322d' }} />
-              <button type="submit" className="button button-primary" disabled={status !== 'Online'}>Enviar</button>
+              <button type="submit" className="button button-primary" disabled={enviando || !texto.trim()}>
+                {enviando ? 'Enviando...' : 'Enviar'}
+              </button>
             </form>
           </>
         )}
@@ -2177,8 +2236,8 @@ function Login({ setCurrentPage, setUser, setToken }) {
     try {
       const response = await apiClient.post('/token/', { username, password });
       const data = response.data;
-      localStorage.setItem('token', data.access);
-      localStorage.setItem('access_token', data.access);
+      sessionStorage.setItem('token', data.access);
+      sessionStorage.setItem('access_token', data.access);
       setToken(data.access);
       setUser({ username, email: username });
       setCurrentPage('dashboard');
@@ -2312,8 +2371,8 @@ function Registro({ setCurrentPage, setUser, setToken }) {
     try {
       const response = await apiClient.post('/auth/registro/', formData);
       const data = response.data;
-      localStorage.setItem('token', data.access);
-      localStorage.setItem('access_token', data.access);
+      sessionStorage.setItem('token', data.access);
+      sessionStorage.setItem('access_token', data.access);
       setToken(data.access);
       setUser({
         username: formData.username,
@@ -2607,8 +2666,8 @@ function Profile({ setCurrentPage, setUser, setToken, token }) {
     if (!window.confirm('Tem certeza que deseja excluir sua conta? Esta ação é irreversível.')) return;
     try {
       await apiClient.delete('/usuarios/me/');
-      localStorage.removeItem('token');
-      localStorage.removeItem('access_token');
+      sessionStorage.removeItem('token');
+      sessionStorage.removeItem('access_token');
       setToken(null);
       setUser(null);
       setCurrentPage('home');
@@ -2697,7 +2756,7 @@ function Profile({ setCurrentPage, setUser, setToken, token }) {
 export default function App() {
   const [currentPage, setCurrentPage] = useState('home');
   const [user, setUser] = useState(null);
-  const [token, setToken] = useState(() => localStorage.getItem('token') || localStorage.getItem('access_token'));
+  const [token, setToken] = useState(() => sessionStorage.getItem('token') || sessionStorage.getItem('access_token'));
   // load user profile when token exists but user state is empty
   useEffect(() => {
     const fetchMe = async () => {
@@ -2710,8 +2769,8 @@ export default function App() {
         console.error('Erro ao buscar perfil atual:', err);
         // se token inválido, limpar
         if (err.response && err.response.status === 401) {
-          localStorage.removeItem('token');
-          localStorage.removeItem('access_token');
+          sessionStorage.removeItem('token');
+          sessionStorage.removeItem('access_token');
           setToken(null);
         }
       }

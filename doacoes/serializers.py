@@ -278,7 +278,7 @@ class MensagemSerializer(serializers.ModelSerializer):
             'destinatario_nome', 'interesse', 'conteudo', 'lida',
             'data_criacao'
         ]
-        read_only_fields = ['id', 'data_criacao']
+        read_only_fields = ['id', 'remetente', 'data_criacao']
 
 
 class MatchSerializer(serializers.Serializer):

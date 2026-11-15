@@ -21,7 +21,7 @@ from .serializers import (
 )
 import logging
 from datetime import date
-from rest_framework.exceptions import ValidationError
+from rest_framework.exceptions import PermissionDenied, ValidationError
 
 
 def haversine_distance(lat1, lon1, lat2, lon2):
@@ -370,9 +370,9 @@ class ItemDoacaoViewSet(viewsets.ModelViewSet):
     def expressar_interesse(self, request, pk=None):
         item = self.get_object()
         usuario = Usuario.objects.filter(user=request.user).first()
-        if not usuario or usuario.tipo != 'receptor':
+        if not usuario:
             return Response(
-                {'error': 'Apenas contas cadastradas como receptor podem expressar interesse.'},
+                {'error': 'Perfil de usuário não encontrado.'},
                 status=status.HTTP_403_FORBIDDEN
             )
 
@@ -440,6 +440,22 @@ class InteresseViewSet(viewsets.ModelViewSet):
             Q(receptor__usuario__user=usuario)
             | Q(item__doador__usuario__user=usuario)
         ).distinct()
+
+    def perform_create(self, serializer):
+        usuario = Usuario.objects.filter(user=self.request.user).first()
+        if not usuario:
+            raise PermissionDenied(
+                'Perfil de usuário não encontrado.'
+            )
+
+        receptor, _ = Receptor.objects.get_or_create(
+            usuario=usuario,
+            defaults={
+                'tipo': 'pessoa',
+                'cnpj': f'PENDENTE{self.request.user.id}',
+            },
+        )
+        serializer.save(receptor=receptor)
 
     @action(detail=True, methods=['post'])
     def confirmar(self, request, pk=None):
