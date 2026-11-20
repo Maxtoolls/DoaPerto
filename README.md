@@ -211,19 +211,43 @@ npm run dev
 - `GET /api/receptores/proximos/?lat=X&lon=Y&km=10`
 - `GET /api/pontos-coleta/proximos/?lat=X&lon=Y&km=10`
 
-## Estrutura de Dados
+## Modelagem de Dados
 
-### Modelos Principais
-- **Usuario** - Usuário base (estende Django User)
-- **Doador** - Pessoa que doa (FK Usuario)
-- **Receptor** - Pessoa/ONG que recebe (FK Usuario)
-- **PontoColeta** - Local de coleta
-- **EventoDoacao** - Campanha temporária organizada por uma academia, ONG, mercado,
-  associação ou outra entidade
-- **ItemDoacao** - Item disponível para doação
-- **Interesse** - Interesse de uma conta autenticada em um item
-- **Mensagem** - Chat entre usuários, com suporte a WebSocket e fallback HTTP
+O DoaPerto usa um banco de dados relacional, com SQLite no desenvolvimento e compatível com PostgreSQL em produção. As tabelas são geradas automaticamente pelas migrações do Django.
 
+### Diagrama Entidade-Relacionamento
+
+<img width="1717" height="1271" alt="Diagrama entidade e relacionamento" src="https://github.com/user-attachments/assets/3577f75f-d35f-49a2-ae26-94cec040094d" />
+
+### Descrição das Entidades
+
+A entidade central é o **Usuario**, que estende o usuário padrão do Django numa relação um-para-um. Ela guarda os dados de contato, o endereço, as coordenadas de geolocalização e os campos de conformidade com a LGPD: aceite dos termos, data do consentimento e pedido de exclusão dos dados. Também possui um autorrelacionamento que registra qual usuário indicou outro.
+
+Cada usuário pode ter um perfil de **Doador** ou de **Receptor**, ambos em relação um-para-um com o usuário. O receptor pode ser uma pessoa física ou uma entidade, como ONG, igreja, escola, academia, supermercado ou associação.
+
+O doador publica vários **Itens de Doação** (um-para-muitos). Cada item pertence a uma **Categoria** e guarda estado de conservação, contribuição voluntária, data de disponibilidade e tipo de entrega, atributos que sustentam os filtros avançados da tela Explorar. O item também pode ser ligado a um **Ponto de Coleta** e a um receptor confirmado.
+
+Quando uma conta se interessa por um item, é criado um registro de **Interesse**, com restrição de unicidade que garante um único interesse por conta em cada item. As **Mensagens** do chat ligam remetente e destinatário e podem estar associadas a um interesse, dando contexto à conversa, com suporte a WebSocket e fallback HTTP.
+
+O **Evento de Doação** representa campanhas temporárias organizadas por um usuário, com período, endereço e status.
+
+As relações muitos-para-muitos com **Categoria** (categorias de interesse do doador, tipos de item aceitos pelo receptor e categorias aceitas em cada evento) são feitas por tabelas intermediárias.
+
+### Relacionamentos principais
+
+| Relação | Cardinalidade |
+|---|---|
+| Usuario → Doador / Receptor | 1 : 1 |
+| Doador → Item de Doação | 1 : N |
+| Categoria → Item de Doação | 1 : N |
+| Ponto de Coleta → Item de Doação | 1 : N |
+| Item de Doação → Interesse | 1 : N |
+| Receptor → Interesse | 1 : N |
+| Interesse → Mensagem | 1 : N |
+| Usuario → Evento de Doação | 1 : N |
+| Doador / Receptor / Evento ↔ Categoria | N : N |
+
+A documentação completa das tabelas está em [DATABASE_DOCUMENTATION.md](DATABASE_DOCUMENTATION.md).
 ## Funcionalidades
 
 ### Fase 1 ✅ (Completa)
