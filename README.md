@@ -4,15 +4,14 @@ Sistema de doações com geolocalização conectando doadores com receptores. A 
 que ilustra bem a dinâmica de praticidade, conscientização e interação entre pessoas que precisa e doadores.
 
 
-<img width="1024" height="572" alt="persona maria" src="https://github.com/user-attachments/assets/e0464a80-9694-4b93-b929-fef5a90dc5ba" />
-
-
-
 <img width="1269" height="496" alt="Captura de tela de 2026-05-18 22-00-39" src="https://github.com/user-attachments/assets/71afde12-16b6-4756-af5c-00e6562ea2d6" />
 
 ## Personas e Jornadas consideradas no projeto (Atualização para novas funcionalidades)
 
 <img width="2800" height="1318" alt="eac2f3f5-59ce-4ac5-85bb-e8e6d33ba77d" src="https://github.com/user-attachments/assets/c5527525-54b6-4bda-82c7-936b5ad87b25" />
+
+<img width="1024" height="572" alt="persona maria" src="https://github.com/user-attachments/assets/e0464a80-9694-4b93-b929-fef5a90dc5ba" />
+
 
 ### Protótipo
 
